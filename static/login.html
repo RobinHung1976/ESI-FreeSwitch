@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>登入 — ESI FreeSwitch Dashboard</title>
+<style>
+  :root {
+    --bg:      #eef4fb;
+    --panel:   #ffffff;
+    --panel2:  #f4f8fd;
+    --border:  #c8d9ee;
+    --accent:  #0277bd;
+    --accent-bright: #0288d1;
+    --accent2: #c62828;
+    --red:     #c62828;
+    --text:    #0a1929;
+    --label:   #1e3d5c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+  }
+  .login-card {
+    width: 100%; max-width: 380px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 36px 32px;
+    box-shadow: 0 8px 24px rgba(2,41,72,0.08);
+  }
+  .brand { text-align: center; margin-bottom: 28px; }
+  .brand-zh { font-size: 20px; font-weight: 700; color: var(--accent); }
+  .brand-en { display: block; font-size: 11px; color: var(--label); margin-top: 4px; }
+  label { display: block; font-size: 13px; color: var(--label); margin: 16px 0 6px; }
+  input {
+    width: 100%; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: var(--panel2); color: var(--text);
+    font-size: 14px;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  button {
+    width: 100%; margin-top: 24px; padding: 11px;
+    background: var(--accent); color: #fff; border: none; border-radius: 8px;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: var(--accent-bright); }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  .error-msg {
+    margin-top: 14px; padding: 10px 12px;
+    background: rgba(198,40,40,0.08); border: 1px solid var(--red);
+    border-radius: 8px; color: var(--red); font-size: 13px;
+    display: none;
+  }
+  .error-msg.show { display: block; }
+</style>
+</head>
+<body>
+
+<div class="login-card">
+  <div class="brand">
+    <div class="brand-zh">易通科技 ESI</div>
+    <span class="brand-en">Expert System IVR (Asia) Co., Ltd.</span>
+  </div>
+
+  <form id="login-form" autocomplete="off">
+    <label for="username">帳號</label>
+    <input type="text" id="username" name="username" autocomplete="username" required>
+
+    <label for="password">密碼</label>
+    <input type="password" id="password" name="password" autocomplete="current-password" required>
+
+    <div id="error-msg" class="error-msg"></div>
+
+    <button type="submit" id="submit-btn">登入</button>
+  </form>
+</div>
+
+<script>
+const API_BASE = 'http://192.168.100.209:3000';
+
+const form      = document.getElementById('login-form');
+const errorBox  = document.getElementById('error-msg');
+const submitBtn = document.getElementById('submit-btn');
+
+function showError(msg) {
+  errorBox.textContent = msg;
+  errorBox.classList.add('show');
+}
+
+function clearError() {
+  errorBox.classList.remove('show');
+  errorBox.textContent = '';
+}
+
+// 已登入（token 未過期）直接跳過登入頁
+(function redirectIfLoggedIn() {
+  const token = localStorage.getItem('access_token');
+  if (!token) return;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    if (payload.exp && payload.exp * 1000 > Date.now()) {
+      window.location.href = '/index.html';
+    } else {
+      localStorage.removeItem('access_token');
+    }
+  } catch (e) {
+    localStorage.removeItem('access_token');
+  }
+})();
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  clearError();
+
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  if (!username || !password) {
+    showError('請輸入帳號與密碼');
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = '登入中...';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+
+    let data;
+    try {
+      data = await res.json();
+    } catch (parseErr) {
+      showError(`伺服器回應格式錯誤（HTTP ${res.status}）`);
+      return;
+    }
+
+    if (!res.ok) {
+      showError(data.detail || '帳號或密碼錯誤');
+      return;
+    }
+
+    localStorage.setItem('access_token', data.access_token);
+    localStorage.setItem('username', data.username);
+    localStorage.setItem('group_name', data.group_name);
+
+    if (data.must_change_password) {
+      // 首次登入強制改密碼：導向獨立改密碼頁，帶 forced=1 避免使用者略過
+      window.location.href = '/change-password.html?forced=1';
+      return;
+    }
+
+    window.location.href = '/index.html';
+  } catch (err) {
+    showError(`連線失敗：${err.message}`);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '登入';
+  }
+});
+</script>
+
+</body>
+</html>

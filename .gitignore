@@ -1,0 +1,6 @@
+settings.json
+data/
+data/auth.db
+__pycache__/
+*.pyc
+backups/

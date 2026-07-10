@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESI 易通科技 — FreeSwitch Dashboard</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<div class="shell">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <a class="brand-logo">
+        <span class="brand-esi-mark">
+          <span class="brand-esi-es">ES</span>
+          <span class="brand-esi-i-wrap">
+            <span class="brand-esi-i">I</span>
+            <span class="brand-esi-dot"></span>
+          </span>
+        </span>
+        <span class="brand-divider"></span>
+        <span class="brand-wordmark">
+          <span class="brand-zh">易通科技</span>
+          <span class="brand-en">Expert System IVR (Asia) Co., Ltd.</span>
+        </span>
+      </a>
+      <div class="logo-sub"><span class="status-dot" id="wsDot"></span>FreeSwitch Console</div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-group" data-group="monitor">
+        <div class="nav-section" onclick="toggleNavGroup('monitor')">
+          <span class="nav-section-label">監控</span>
+          <span class="nav-section-arrow">▾</span>
+        </div>
+        <div class="nav-group-items">
+          <div class="nav-item active" data-page="overview" onclick="switchPage('overview')">
+            <span class="nav-icon">◈</span> 通話即時狀態
+            <span class="nav-badge green" id="nav-calls-badge">0</span>
+          </div>
+          <div class="nav-item" data-page="report" onclick="switchPage('report')">
+            <span class="nav-icon">📊</span> 通話統計報表
+          </div>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="manage">
+        <div class="nav-section" onclick="toggleNavGroup('manage')">
+          <span class="nav-section-label">管理</span>
+          <span class="nav-section-arrow">▾</span>
+        </div>
+        <div class="nav-group-items">
+          <div class="nav-item" data-page="extensions" onclick="switchPage('extensions')">
+            <span class="nav-icon">⊟</span> 分機管理
+          </div>
+          <div class="nav-item" data-page="groups" onclick="switchPage('groups')">
+            <span class="nav-icon">▣</span> 分機群組
+          </div>
+          <div class="nav-item" data-page="ivr" onclick="switchPage('ivr')">
+            <span class="nav-icon">🎛</span> IVR 管理
+          </div>
+          <div class="nav-item" data-page="cdr" onclick="switchPage('cdr')">
+            <span class="nav-icon">≡</span> 通話記錄 CDR
+          </div>
+          <div class="nav-item" data-page="recordings" onclick="switchPage('recordings')">
+            <span class="nav-icon">🎵</span> 錄音管理
+          </div>
+          <div class="nav-item" data-page="gateway" onclick="switchPage('gateway')">
+            <span class="nav-icon">⊕</span> Gateway / SIP Trunk
+          </div>
+		  <div class="nav-item" data-page="sip_profile" onclick="switchPage('sip_profile')">
+			<span class="nav-icon">📡</span> SIP Profile 進階設定
+		  </div>
+          <div class="nav-item" data-page="dialplan_routes" onclick="switchPage('dialplan_routes')">
+            <span class="nav-icon">🛣</span> Dialplan 路由設定
+          </div>
+          <div class="nav-item" data-page="sounds" onclick="switchPage('sounds')">
+            <span class="nav-icon">🔊</span> 音檔庫
+          </div>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="system">
+        <div class="nav-section" onclick="toggleNavGroup('system')">
+          <span class="nav-section-label">系統</span>
+          <span class="nav-section-arrow">▾</span>
+        </div>
+        <div class="nav-group-items">
+          <div class="nav-item" data-page="numbers" onclick="switchPage('numbers')">
+            <span class="nav-icon">☎</span> 號碼目錄
+          </div>
+          <div class="nav-item" data-page="esl" onclick="switchPage('esl')">
+            <span class="nav-icon">›_</span> ESL 終端機
+            <span class="nav-badge">CLI</span>
+          </div>
+          <div class="nav-item" data-page="logs" onclick="switchPage('logs')">
+            <span class="nav-icon">⊡</span> 系統日誌
+          </div>
+          <div class="nav-item" data-page="settings" onclick="switchPage('settings')">
+            <span class="nav-icon">⚙</span> 設定
+          </div>
+          <div class="nav-item" data-page="backup" onclick="switchPage('backup')">
+            <span class="nav-icon">🗄</span> 備份管理
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="server-info" id="sf-fs-conn">
+        <span id="sf-fs-dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--muted);margin-right:6px;vertical-align:middle;box-shadow:0 0 0px transparent;transition:all 0.3s"></span>
+        連線至 FreeSwitch
+      </div>
+      <div class="server-status" id="sf-sys-status">系統狀態：載入中...</div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <!-- Content -->
+    <div class="content" id="mainContent">
+      <!-- Pages injected by JS -->
+    </div>
+  </main>
+</div>
+
+<!-- Annotation toggle -->
+
+
+<script src="/static/js/common.js"></script>
+<script src="/static/js/overview-report.js"></script>
+<script src="/static/js/calls.js"></script>
+<script src="/static/js/extensions-groups.js"></script>
+<script src="/static/js/cdr.js"></script>
+<script src="/static/js/gateway.js"></script>
+<script src="/static/js/sip-profile.js"></script>  <!-- 新增這行 -->
+<script src="/static/js/esl.js"></script>
+<script src="/static/js/logs.js"></script>
+<script src="/static/js/settings-vars.js"></script>
+<script src="/static/js/backup.js"></script>
+<script src="/static/js/recordings.js"></script>
+<script src="/static/js/sounds.js"></script>
+<script src="/static/js/ivr.js"></script>
+<script src="/static/js/numbers.js"></script>
+<script src="/static/js/dialplan.js"></script>
+<script src="/static/js/init.js"></script>
+</body>
+</html>
