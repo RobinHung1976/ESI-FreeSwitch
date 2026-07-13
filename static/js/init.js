@@ -21,6 +21,7 @@ const pages = {
   settings:    { render: () => renderSettings(_settingsNode), title: '系統設定' },
   backup:      { render: () => renderBackupPage(_backupNode),  title: '備份管理' },
   sip_profile: { render: renderSipProfile,  title: 'SIP Profile 進階設定' },
+  users:       { render: renderUsersManagement, title: '使用者管理' },
 };
 
 let currentPage = 'overview';
