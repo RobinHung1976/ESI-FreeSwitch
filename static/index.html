@@ -117,8 +117,6 @@
         連線至 FreeSwitch
       </div>
       <div class="server-status" id="sf-sys-status">系統狀態：載入中...</div>
-      <div id="sf-user-info" style="font-size:11px;color:var(--muted);margin-top:6px"></div>
-      <button class="btn" style="width:100%;margin-top:8px" onclick="logout()">🚪 登出</button>
     </div>
   </aside>
 
@@ -133,6 +131,11 @@
 
 <!-- Annotation toggle -->
 
+
+<div id="topbar-user" style="position:fixed;top:12px;right:16px;z-index:500;display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:20px;padding:6px 8px 6px 14px;box-shadow:var(--glow)">
+  <span id="sf-user-info" style="font-size:11px;color:var(--muted);white-space:nowrap"></span>
+  <button class="btn" style="padding:4px 10px;font-size:11px;white-space:nowrap" onclick="logout()">🚪 登出</button>
+</div>
 
 <script src="/static/js/common.js"></script>
 <script src="/static/js/overview-report.js"></script>

@@ -61,6 +61,11 @@ function setSysStatus(text) {
 
 async function loadSysStatus() {
   const res = await runESLCommand('status');
+  if (res && res.detail && !res.result) {
+    // 後端 require_permission() 403 回傳格式是 {"detail": "..."}，代表此帳號沒有 ESL 模組讀取權限
+    setSysStatus('系統狀態：無存取權限');
+    return;
+  }
   if (!res || !res.result) { setSysStatus('系統狀態：無法取得'); return; }
   const s = res.result;
   const uptimeMatch = s.match(/UP (.+?)\n/);
