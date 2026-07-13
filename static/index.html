@@ -122,6 +122,13 @@
 
   <!-- Main -->
   <main class="main">
+    <div class="topbar">
+      <span class="page-title" id="pageTitle"></span>
+      <div class="topbar-right">
+        <span id="sf-user-info" style="font-size:11px;color:var(--muted);white-space:nowrap"></span>
+        <button class="btn" onclick="logout()">🚪 登出</button>
+      </div>
+    </div>
     <!-- Content -->
     <div class="content" id="mainContent">
       <!-- Pages injected by JS -->
@@ -131,11 +138,6 @@
 
 <!-- Annotation toggle -->
 
-
-<div id="topbar-user" style="position:fixed;top:12px;right:16px;z-index:500;display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:20px;padding:6px 8px 6px 14px;box-shadow:var(--glow)">
-  <span id="sf-user-info" style="font-size:11px;color:var(--muted);white-space:nowrap"></span>
-  <button class="btn" style="padding:4px 10px;font-size:11px;white-space:nowrap" onclick="logout()">🚪 登出</button>
-</div>
 
 <script src="/static/js/common.js"></script>
 <script src="/static/js/overview-report.js"></script>
