@@ -26,6 +26,34 @@ const pages = {
 
 let currentPage = 'overview';
 
+// ── 依 JWT 權限矩陣調整畫面：隱藏無權限的導覽項目 + 顯示登入身分 ──────────────
+// JWT payload 已快取整份權限矩陣（core/auth.py 設計如此），不需額外打 API。
+// data-page 與 core/permissions.py 的 Module 常數大部分同名，Dialplan 三個子頁共用 'dialplan' 模組。
+const NAV_PAGE_TO_MODULE = {
+  dialplan_routes: 'dialplan', dialplan_custom: 'dialplan', dialplan_system_ext: 'dialplan',
+};
+
+function applyAuthUI() {
+  const payload = getTokenPayload();
+  if (!payload) return;
+
+  const perms = payload.permissions;
+  if (perms) {
+    document.querySelectorAll('.nav-item[data-page]').forEach(el => {
+      const page = el.dataset.page;
+      const mod  = NAV_PAGE_TO_MODULE[page] || page;
+      const p    = perms[mod];
+      if (!p || !p.read) el.style.display = 'none';
+    });
+  }
+
+  const userInfoEl = document.getElementById('sf-user-info');
+  if (userInfoEl) {
+    const name  = payload.username   || '';
+    const group = payload.group_name || '';
+    userInfoEl.textContent = name ? `登入身分：${name}${group ? '（' + group + '）' : ''}` : '';
+  }
+}
 
 async function switchPage(id) {
   if (!pages[id]) return;
@@ -68,6 +96,7 @@ async function refreshData() {
 
 initWebSocket();
 initNavCollapse();
+applyAuthUI();
 switchPage('overview');
 updateNavBadge();  // 初始載入取一次
 
@@ -83,4 +112,3 @@ if ('Notification' in window && Notification.permission === 'default') {
 // - 分機頁：EXT_STATUS_UPDATE 事件 → applyExtStatusUpdate() 局部更新 DOM
 // - 總覽/通話頁：CHANNEL_* 事件 → switchPage() 重繪
 // - 即時通話 badge：CHANNEL_* 事件 → updateNavBadge()
-

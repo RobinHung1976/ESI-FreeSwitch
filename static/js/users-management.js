@@ -2,7 +2,6 @@
 // 依賴 common.js 的 apiFetch() / getToken()，慣例比照 extensions-groups.js 的 list/editor 面板切換寫法。
 // 欄位已對照 core/auth_db.py 確認：list_users()/list_groups() 回傳欄位與本檔假設一致。
 
-// ── 模組分類（對照 core/permissions.py，勿自行增減）────────────────────────
 const _UM_MODULE_LABELS = {
   overview: '總覽', report: '報表', extensions: '分機管理', groups: '分機群組',
   ivr: 'IVR', numbers: '號碼目錄', calls: '即時通話', cdr: 'CDR',
@@ -17,14 +16,12 @@ const _UM_CATEGORIES = [
 ];
 const _UM_SCOPABLE_MODULES = new Set(['cdr', 'recordings', 'calls']);
 
-// ── 全域狀態 ────────────────────────────────────────────────────────────────
 let _umTab = 'users';
 let _umUsers = [];
 let _umGroups = [];
 let _umEditingUserId = null;
 let _umEditingGroupId = null;
 
-// ── 主 render ──────────────────────────────────────────────────────────────
 async function renderUsersManagement() {
   document.getElementById('mainContent').innerHTML =
     `<div style="padding:40px;text-align:center;color:var(--muted)">載入中...</div>`;
@@ -68,10 +65,6 @@ function _umSwitchTab(tab) {
   if (btns[1]) btns[1].className = `btn ${tab === 'groups' ? 'primary' : ''}`;
 }
 
-// ════════════════════════════════════════════════════════════════════════
-// 使用者 Tab
-// ════════════════════════════════════════════════════════════════════════
-
 function _umGroupName(u) {
   if (u.group_name) return u.group_name;
   const g = _umGroups.find(g => g.id === u.group_id);
@@ -84,7 +77,7 @@ function _umBuildUsersListPanel() {
     const mustChange = !!u.must_change_password;
     return `
     <tr>
-      <td style="padding:8px 10px;color:#fff">${u.username}</td>
+      <td style="padding:8px 10px;color:var(--text)">${u.username}</td>
       <td style="padding:8px 10px">${_umGroupName(u)}</td>
       <td style="padding:8px 10px;font-family:monospace">${u.owned_ext || '—'}</td>
       <td style="padding:8px 10px">
@@ -141,7 +134,7 @@ function _umOpenUserEditor(userId) {
   editorPanel.innerHTML = `
   <div class="panel" style="max-width:560px;margin:0 auto">
     <div class="panel-header">
-      <span class="panel-title">${u ? `編輯使用者：${u.username}` : '新增使用者'}</span>
+      <span class="panel-title" style="line-height:1.6;display:inline-block">${u ? `編輯使用者：${u.username}` : '新增使用者'}</span>
     </div>
     <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
       <div class="settings-row">
@@ -278,17 +271,13 @@ async function _umDeleteUser(userId, username) {
   else { alert(`刪除失敗：${(data && data.detail) || '未知錯誤'}`); }
 }
 
-// ════════════════════════════════════════════════════════════════════════
-// 權限群組 Tab
-// ════════════════════════════════════════════════════════════════════════
-
 function _umBuildGroupsListPanel() {
   const cards = _umGroups.map(g => {
     const scopeLabel = g.scope === 'own' ? '僅本人 (own)' : '全部 (all)';
     return `
     <div class="panel" style="margin-bottom:10px">
       <div class="panel-header">
-        <span class="panel-title">${g.name} ${g.is_builtin ? '<span style="font-size:10px;color:var(--muted);margin-left:6px">內建・不可刪除/改名</span>' : ''}</span>
+        <span class="panel-title" style="line-height:1.6;display:inline-block">${g.name} ${g.is_builtin ? '<span style="font-size:10px;color:var(--muted);margin-left:6px">內建・不可刪除/改名</span>' : ''}</span>
         <div class="panel-actions">
           <span class="panel-badge">scope: ${scopeLabel}</span>
           <button class="btn" style="padding:3px 8px;font-size:11px" onclick="_umOpenGroupEditor(${g.id})">${g.is_builtin ? '👁 檢視矩陣' : '✏ 編輯權限矩陣'}</button>
@@ -369,7 +358,7 @@ function _umOpenGroupEditor(groupId) {
   editorPanel.innerHTML = `
   <div class="panel" style="max-width:720px;margin:0 auto">
     <div class="panel-header">
-      <span class="panel-title">${g ? (readonly ? `檢視群組：${g.name}` : `編輯權限矩陣：${g.name}`) : '新增自訂群組'}</span>
+      <span class="panel-title" style="line-height:1.6;display:inline-block">${g ? (readonly ? `檢視群組：${g.name}` : `編輯權限矩陣：${g.name}`) : '新增自訂群組'}</span>
     </div>
     <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
       <div class="settings-row">

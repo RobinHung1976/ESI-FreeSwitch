@@ -20,6 +20,17 @@ function isTokenValid(token) {
   }
 }
 
+/** 直接解出 JWT payload（含使用者名稱、群組、權限矩陣），不需額外打 API */
+function getTokenPayload() {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    return JSON.parse(atob(token.split('.')[1]));
+  } catch (e) {
+    return null;
+  }
+}
+
 function redirectToLogin() {
   localStorage.removeItem('access_token');
   window.location.href = '/login.html';
