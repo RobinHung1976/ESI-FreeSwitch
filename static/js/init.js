@@ -49,7 +49,8 @@ function applyAuthUI() {
 
   const userInfoEl = document.getElementById('sf-user-info');
   if (userInfoEl) {
-    const name  = payload.username   || '';
+    // core/auth.py 的 create_access_token() 實際存的 claim 是 "sub"（JWT 標準慣例），不是 "username"
+    const name  = payload.sub        || '';
     const group = payload.group_name || '';
     userInfoEl.textContent = name ? `登入身分：${name}${group ? '（' + group + '）' : ''}` : '';
   }
