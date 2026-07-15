@@ -4,6 +4,8 @@
 
 ## 2026-07
 
+- 07-15 fix: reorg/ 文件目錄（PROJECT-OVERVIEW.md/CHANGELOG.md/changelog-details/archive/features/ops/reference）稽核發現從未被 git 追蹤，全數補進版控 → [詳情](changelog-details/20260715-reorg-git-tracking-fix.md)
+
 - 07-15 feat: Nginx reverse proxy + HTTPS 上線（自簽憑證、REST/WebSocket/SSE 統一走 443、login.html/change-password.html mixed content 修正、nginx 設定納入 git 版控、後端服務改 bind 127.0.0.1） → [詳情](changelog-details/20260715-nginx-https-feature.md)
 
 - 07-15 fix: `updateN.sh` 自動歸檔固定寫法誤用當次腳本編號建立資料夾（`update8.sh` 誤建 `update8/`），修正為統一固定使用 `updateN/` 資料夾 → [詳情](changelog-details/20260715-updaten-archive-folder-fix.md)
