@@ -570,11 +570,8 @@ async def ws_handler(websocket):
         print(f"瀏覽器已離線：{websocket.remote_address}")
 
 async def start_ws_server():
-    """在 main event loop 內啟動 WebSocket server
-    只 bind 127.0.0.1：對外一律透過 nginx 的 /ws/ 反向代理轉發進來，
-    8080 本身不再對外或對內網其他主機開放，降低攻擊面。
-    """
-    server = await websockets.serve(ws_handler, "127.0.0.1", 8080)
-    print("WebSocket 啟動於 ws://127.0.0.1:8080（僅限本機，經 nginx /ws/ 轉發對外）")
+    """在 main event loop 內啟動 WebSocket server"""
+    server = await websockets.serve(ws_handler, "0.0.0.0", 8080)
+    print("WebSocket 啟動於 ws://0.0.0.0:8080")
     return server
 

@@ -2,14 +2,8 @@
 // 必須最先載入，其他所有 js 檔都依賴這裡的全域函式與變數。
 
 // ── 後端設定 ──────────────────────────────────────────────────────────────────
-// 統一透過 nginx 反向代理走同一個 origin（https:443），不再寫死 IP/port。
-// 好處：內網/外網切換、換 IP 或改用網域，都不用再改這支檔案。
-const API_BASE = '';   // 相對路徑，瀏覽器自動帶目前頁面的 protocol+host
-
-// https 頁面禁止建立不安全的 ws:// 連線（mixed content），故跟隨目前頁面協定
-// 對應 nginx 的 location /ws/ → 轉發到後端 127.0.0.1:8080
-const WS_PROTOCOL = location.protocol === 'https:' ? 'wss:' : 'ws:';
-const WS_URL = `${WS_PROTOCOL}//${location.host}/ws`;
+const API_BASE = 'http://192.168.100.209:3000';
+const WS_URL   = 'ws://192.168.100.209:8080';
 
 // ── 認證：載入頁面時先檢查 token，沒有/過期直接導回登入頁 ─────────────────────
 function getToken() {
