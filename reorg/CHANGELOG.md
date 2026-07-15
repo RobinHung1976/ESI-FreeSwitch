@@ -4,6 +4,7 @@
 
 ## 2026-07
 
+- 07-15 feat: 登錄記錄（reg_log）SQLite 持久化，取代原本服務重啟即歸零的記憶體 list，新增保留天數設定與每日自動清理 → [詳情](changelog-details/20260715-reg-log-persistence.md)
 - 07-15 fix: reorg/ 文件目錄（PROJECT-OVERVIEW.md/CHANGELOG.md/changelog-details/archive/features/ops/reference）稽核發現從未被 git 追蹤，全數補進版控 → [詳情](changelog-details/20260715-reorg-git-tracking-fix.md)
 
 - 07-15 feat: Nginx reverse proxy + HTTPS 上線（自簽憑證、REST/WebSocket/SSE 統一走 443、login.html/change-password.html mixed content 修正、nginx 設定納入 git 版控、後端服務改 bind 127.0.0.1） → [詳情](changelog-details/20260715-nginx-https-feature.md)

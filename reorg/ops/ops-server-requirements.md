@@ -38,6 +38,8 @@ uvicorn server:app --host 0.0.0.0 --port 3000 --reload
 
 套件：`fastapi`、`uvicorn`、`websockets`（鎖版本區間 `>=14,<17`，見下方提醒）、`lxml`、`python-multipart`
 
+**⚠️ `sqlite3` 不需要，也不應該加進 `requirements.txt`**：Python 標準函式庫內建 `sqlite3` 模組（`core/cdr_db.py`、`core/auth_db.py`、`core/reg_log_db.py` 都是用這個，隨 Python 直接可用，不需安裝）。2026-07-15 另外用 `apt-get install -y sqlite3` 裝的是**系統層級的 CLI 工具**（`sqlite3` 指令本身），純粹方便手動下 SQL 查詢除錯用，跟 Python 程式碼的執行完全無關，兩者不要混淆。
+
 ```bash
 /opt/myapp/venv/bin/pip install -r requirements.txt --break-system-packages
 ```
@@ -53,6 +55,7 @@ uvicorn server:app --host 0.0.0.0 --port 3000 --reload
 | 後端設定檔（含密碼/金鑰，不進 git） | `/opt/fs-dashboard/settings.json` |
 | 使用者/權限 SQLite（不進 git） | `/opt/fs-dashboard/data/auth.db` |
 | CDR SQLite DB | `/opt/fs-dashboard/data/cdr.db` |
+| 登錄記錄 SQLite DB | `/opt/fs-dashboard/data/reg_log.db`（2026-07-15 起持久化，見 `changelog-details/20260715-reg-log-persistence.md`） |
 | 錄音索引 SQLite | `/var/lib/freeswitch/recordings/.rec_index.db` |
 | 備份輸出目錄（不進 git） | `/opt/fs-dashboard/backups/` |
 | IVR Lua 引擎 | `/usr/share/freeswitch/scripts/ivr_runner.lua` |

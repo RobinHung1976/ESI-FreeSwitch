@@ -111,7 +111,7 @@ cd /opt/fs-dashboard
 ## 五、已知待處理事項(截至 2026-07-13)
  
 1. **全新環境部署需手動觸發帳號建立**:`server.py` 只呼叫 `auth_db.init_db()` 建表,不會自動 seed,需手動呼叫一次 `POST /api/auth/bootstrap`。詳見 `feature-permissions-auth.md`。
-2. **登錄記錄(`reg_log`)尚未持久化**:目前仍在記憶體,服務重啟後歸零(注意:CDR 已 SQLite 化,但 `reg_log` 尚未,兩者不同,不可混淆)。
+2. ~~**登錄記錄(`reg_log`)尚未持久化**:目前仍在記憶體,服務重啟後歸零。~~ → 已於 2026-07-15 完成，見 `changelog-details/20260715-reg-log-persistence.md`。
 3. **Dialplan Context 切換 UI**:後端 `RouteRule` 已有 `context` 欄位,前端加選單即可。
 4. ~~**Nginx reverse proxy + HTTPS**：尚未導入。~~ → 已於 2026-07-15 完成，見 `changelog-details/20260715-nginx-https-feature.md`。
 5. USER_NOT_REGISTERED 警告:每通電話出現的無害 NOTICE,`mod_sofia` 內部查詢順序造成,不影響通話品質,可忽略。
@@ -124,7 +124,7 @@ cd /opt/fs-dashboard
 - [x] 使用者管理前端頁面(已完成,2026-07-13,見 `feature-permissions-auth.md` 第六節)
 - [x] Nginx reverse proxy + HTTPS（已完成，2026-07-15，見 `changelog-details/20260715-nginx-https-feature.md`）
 **中優先**
-- [ ] 登錄記錄(`reg_log`)持久化
+- [x] 登錄記錄(`reg_log`)持久化（已完成，2026-07-15，見 `changelog-details/20260715-reg-log-persistence.md`）
 - [ ] Dialplan Context 切換 UI
 - [ ] 導覽列權限隱藏全面驗證(見已知待處理事項第 7 點)
 **低優先**
