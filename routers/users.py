@@ -24,6 +24,7 @@ class UpdateUserRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     new_password: str = Field(min_length=8)
+    force_change: bool = True  # 是否強制下次登入改密碼（預設 True，維持原行為）
 
 
 @router.get("", dependencies=[Depends(require_permission(Module.USERS, "read"))])
@@ -54,7 +55,7 @@ def update_user(user_id: int, body: UpdateUserRequest):
 @router.post("/{user_id}/reset-password", dependencies=[Depends(require_permission(Module.USERS, "update"))])
 def reset_password(user_id: int, body: ResetPasswordRequest):
     try:
-        auth_db.reset_password(user_id, body.new_password, force_change=True)
+        auth_db.reset_password(user_id, body.new_password, force_change=body.force_change)
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {"ok": True}
