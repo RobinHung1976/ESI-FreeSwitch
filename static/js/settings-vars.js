@@ -11,6 +11,7 @@ const SETTINGS_DEFAULTS = {
   cdr_retain_days:     '30',
   cdr_summary_retain_days: '730',
   log_retain_days:     '30',
+  reg_log_retain_days: '90',
   ui_language:         'zh-TW',
   backup_path:         '/opt/fs-dashboard/backups',
   backup_retain_days:  '30',
@@ -48,6 +49,7 @@ async function saveSettingsWithBackend() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       log_retain_days:     parseInt(cfg.log_retain_days)     || 30,
+      reg_log_retain_days: parseInt(cfg.reg_log_retain_days) || 90,
       cdr_retain_days:     parseInt(cfg.cdr_retain_days)     || 30,
       cdr_summary_retain_days: parseInt(cfg.cdr_summary_retain_days) || 730,
       backup_path:         cfg.backup_path                   || '/opt/fs-dashboard/backups',
@@ -405,6 +407,12 @@ async function settingsContent(node, cfg) {
           <input class="settings-input" data-setting="log_retain_days" type="number"
             value="${cfg.log_retain_days}" min="1" max="365" style="max-width:80px" />
           <span style="font-size:12px;color:var(--muted)">天（每日 00:00 自動刪除超過天數的日誌）</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">登錄記錄保留天數</span>
+          <input class="settings-input" data-setting="reg_log_retain_days" type="number"
+            value="${cfg.reg_log_retain_days}" min="1" max="3650" style="max-width:80px" />
+          <span style="font-size:12px;color:var(--muted)">天（分機登入/登出記錄，2026-07-15 起改用 SQLite 持久化）</span>
         </div>
         <div class="settings-hint">
           系統每日 <strong>00:00:30</strong> 自動歸檔日誌並清除超過保留天數的舊檔。<br>

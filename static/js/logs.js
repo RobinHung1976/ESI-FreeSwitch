@@ -213,12 +213,47 @@ function renderLogs() {
 
     <!-- ── Tab: 登錄記錄 ── -->
     <div id="log-pane-reg" style="display:none;flex-direction:column;gap:12px;flex:1;min-height:0">
+
+      <!-- 查詢列 -->
+      <div class="panel" style="padding:14px 16px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <label style="font-weight:600;color:var(--label);white-space:nowrap">起始日期：</label>
+          <input id="reg-date-from" type="date"
+            style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;
+              background:var(--panel2);color:var(--text);font-family:inherit;font-size:13px">
+
+          <label style="font-weight:600;color:var(--label);white-space:nowrap">結束日期：</label>
+          <input id="reg-date-to" type="date"
+            style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;
+              background:var(--panel2);color:var(--text);font-family:inherit;font-size:13px">
+
+          <label style="font-weight:600;color:var(--label);white-space:nowrap">分機：</label>
+          <input id="reg-ext-filter" type="text" placeholder="例如 1126"
+            style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;
+              background:var(--panel2);color:var(--text);font-family:inherit;font-size:13px;min-width:100px"
+            onkeydown="if(event.key==='Enter') loadRegLog(1)">
+
+          <label style="font-weight:600;color:var(--label);white-space:nowrap">事件：</label>
+          <select id="reg-event-filter" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;
+            background:var(--panel2);color:var(--text);font-family:inherit;font-size:13px">
+            <option value="">全部</option>
+            <option value="REGISTER">登錄</option>
+            <option value="UNREGISTER">登出</option>
+          </select>
+
+          <button class="btn primary" onclick="loadRegLog(1)">🔍 查詢</button>
+          <button class="btn" onclick="resetRegLogFilter()">↺ 清除篩選</button>
+        </div>
+      </div>
+
       <div class="panel" style="flex:1;display:flex;flex-direction:column;min-height:0">
         <div class="panel-header">
           <span class="panel-title">分機登錄 / 登出記錄</span>
           <span class="panel-badge" id="reg-log-badge">載入中...</span>
-          <div class="panel-actions">
-            <button class="btn" onclick="loadRegLog()">↺ 刷新</button>
+          <div class="panel-actions" id="reg-pager" style="display:none;align-items:center;gap:6px">
+            <button class="btn" id="reg-prev" onclick="regPageGo(-1)">◀ 上一頁</button>
+            <span id="reg-page-label" style="font-size:12px;color:var(--muted)">1 / 1</span>
+            <button class="btn" id="reg-next" onclick="regPageGo(1)">下一頁 ▶</button>
           </div>
         </div>
         <div style="overflow-y:auto;flex:1;min-height:0" id="reg-log-body">
@@ -283,17 +318,49 @@ function switchLogTab(tab) {
 }
 
 // ── 登錄記錄 ─────────────────────────────────────────────────────────────────
-async function loadRegLog() {
+let _regPage = 1;
+let _regPerPage = 200;
+let _regTotalPages = 1;
+
+async function loadRegLog(page) {
+  if (page) _regPage = page;
   const body  = document.getElementById('reg-log-body');
   const badge = document.getElementById('reg-log-badge');
+  const pager = document.getElementById('reg-pager');
   if (!body) return;
   body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted)">載入中...</div>';
+
+  const dateFromEl = document.getElementById('reg-date-from');
+  const dateToEl   = document.getElementById('reg-date-to');
+  const extEl      = document.getElementById('reg-ext-filter');
+  const eventEl    = document.getElementById('reg-event-filter');
+  const dateFrom = dateFromEl ? dateFromEl.value : '';
+  const dateTo   = dateToEl   ? dateToEl.value   : '';
+  const ext      = extEl      ? extEl.value.trim() : '';
+  const eventVal = eventEl    ? eventEl.value : '';
+
+  const params = new URLSearchParams({ page: _regPage, per_page: _regPerPage });
+  if (dateFrom) params.set('date_from', dateFrom);
+  if (dateTo)   params.set('date_to', dateTo);
+  if (ext)      params.set('ext', ext);
+  if (eventVal) params.set('event', eventVal);
+
   try {
-    const data = await apiFetch('/api/reg/log');
-    const logs = (data && data.logs) ? data.logs : [];
+    const data = await apiFetch(`/api/reg/log?${params.toString()}`);
+    const logs = (data && data.rows) ? data.rows : [];
+    _regTotalPages = data.total_pages || 1;
     if (badge) badge.textContent = `共 ${data.total || 0} 筆`;
+    if (pager) {
+      pager.style.display = _regTotalPages > 1 ? 'flex' : 'none';
+      const label   = document.getElementById('reg-page-label');
+      const prevBtn = document.getElementById('reg-prev');
+      const nextBtn = document.getElementById('reg-next');
+      if (label)   label.textContent = `${_regPage} / ${_regTotalPages}`;
+      if (prevBtn) prevBtn.disabled = _regPage <= 1;
+      if (nextBtn) nextBtn.disabled = _regPage >= _regTotalPages;
+    }
     if (!logs.length) {
-      body.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">尚無登錄記錄（分機登入/登出後會自動記錄）</div>';
+      body.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">尚無登錄記錄（分機登入/登出後會自動記錄，或篩選條件無符合資料）</div>';
       return;
     }
     const rows = logs.map(r => {
@@ -330,6 +397,20 @@ async function loadRegLog() {
   } catch(e) {
     body.innerHTML = `<div style="padding:24px;color:var(--red)">載入失敗：${e.message}</div>`;
   }
+}
+
+function regPageGo(delta) {
+  const next = _regPage + delta;
+  if (next < 1 || next > _regTotalPages) return;
+  loadRegLog(next);
+}
+
+function resetRegLogFilter() {
+  ['reg-date-from', 'reg-date-to', 'reg-ext-filter', 'reg-event-filter'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  loadRegLog(1);
 }
 
 // ── 歷史日誌：載入日期選單 ───────────────────────────────────────────────────

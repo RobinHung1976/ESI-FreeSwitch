@@ -18,6 +18,7 @@ from core.ws_manager import manager
 from core.backup_manager import backup_dashboard_config, backup_freeswitch_packages, cleanup_old_backups
 from core import state
 from core import cdr_db
+from core import reg_log_db
 from core.auth import TokenError
 from urllib.parse import urlparse, parse_qs
 
@@ -202,20 +203,16 @@ def broadcast_ext_status(ext_num: str):
 
 
 def write_reg_log(ext: str, event: str, ip: str, proto: str, ts_ms: int):
-    """Write registration event to in-memory log (max REG_LOG_MAX entries)"""
+    """Write registration event to persistent SQLite log（core/reg_log_db.py）。
+    2026-07-15：取代原本的記憶體 list（服務重啟即歸零）。
+    """
     import datetime as _dt
     time_str = _dt.datetime.fromtimestamp(ts_ms / 1000).strftime('%Y-%m-%d %H:%M:%S')
-    entry = {
-        "ext":       ext,
-        "event":     event,
-        "ip":        ip,
-        "proto":     proto.upper() if proto else "UDP",
-        "ts":        ts_ms,
-        "time_str":  time_str,
-    }
-    state.reg_log.append(entry)
-    if len(state.reg_log) > state.REG_LOG_MAX:
-        state.reg_log.pop(0)
+    proto_up = proto.upper() if proto else "UDP"
+    try:
+        reg_log_db.insert_log(ext, event, ip, proto_up, ts_ms, time_str)
+    except Exception as e:
+        print(f"[REG_LOG] SQLite 寫入失敗：{e}")
     print(f"[REG_LOG] {event} ext={ext} ip={ip} at {time_str}")
 
     # Inject into live log SSE stream as a synthetic log line
@@ -298,6 +295,7 @@ def load_server_settings() -> dict:
         "log_retain_days": 30,
         "cdr_retain_days": 30,
         "cdr_summary_retain_days": 730,   # 每日彙總（SQLite）長期保留天數，與 raw 明細分開計算
+        "reg_log_retain_days": 90,        # 登錄記錄（reg_log，SQLite）保留天數，2026-07-15 起持久化
     }
     try:
         if os.path.isfile(SETTINGS_FILE):
@@ -449,6 +447,21 @@ def _cleanup_old_cdrs():
     return deleted
 
 
+def _cleanup_old_reg_logs():
+    """刪除超過保留天數的登錄記錄（SQLite，2026-07-15 起持久化）"""
+    settings = load_server_settings()
+    retain_days = int(settings.get("reg_log_retain_days", 90))
+    cutoff_str = (datetime.now() - timedelta(days=retain_days)).strftime("%Y-%m-%d")
+    try:
+        purged = reg_log_db.purge_before(cutoff_str)
+        if purged:
+            print(f"[reg-log-cleanup] 已清除 {purged} 筆（早於 {cutoff_str}）")
+        return purged
+    except Exception as e:
+        print(f"[reg-log-cleanup] 清理失敗：{e}")
+        return 0
+
+
 async def log_rotate_scheduler():
     """背景協程：sleep 到精確觸發時間，或被 settings 儲存事件提早喚醒重新計算。"""
     _rotated_date:   str = ""
@@ -515,6 +528,7 @@ async def log_rotate_scheduler():
             _cleanup_old_logs()
             print(f"[cdr-rotate] {_rotate_cdr_now()}")
             _cleanup_old_cdrs()
+            _cleanup_old_reg_logs()
             cleanup_old_backups()
 
         # ── 自動備份（backup_auto_time，同天只執行一次）─────────────────────

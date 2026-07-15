@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from core.esl_client import esl
 from core import state
+from core import reg_log_db
 from core.auth import require_permission, get_current_user, apply_scope
 from core.permissions import Module
 
@@ -56,9 +57,31 @@ def get_ext_status():
 
 
 @router.get("/api/reg/log", dependencies=[Depends(require_permission(Module.CALLS, "read"))])
-def get_reg_log(limit: int = Query(default=200, ge=1, le=500)):
-    """Return registration history log (newest first)"""
-    return {"logs": list(reversed(state.reg_log[-limit:])), "total": len(state.reg_log)}
+def get_reg_log(
+    date_from: str = Query(default=None, description="起始日期 YYYY-MM-DD"),
+    date_to:   str = Query(default=None, description="結束日期 YYYY-MM-DD"),
+    ext:       str = Query(default=None, description="依分機篩選"),
+    event:     str = Query(default=None, description="REGISTER / UNREGISTER"),
+    page:      int = Query(default=1, ge=1),
+    per_page:  int = Query(default=200, ge=1, le=1000),
+    user: dict = Depends(get_current_user),
+):
+    """
+    登錄記錄查詢（SQLite 持久化，2026-07-15 起取代記憶體 list，見 core/reg_log_db.py）。
+    """
+    if user["scope"] == "own":
+        ext = apply_scope(user, ext, Module.CALLS)
+    offset = (page - 1) * per_page
+    result = reg_log_db.query_logs(
+        date_from=date_from, date_to=date_to, ext=ext, event=event,
+        limit=per_page, offset=offset,
+    )
+    total = result["total"]
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    return {
+        "total": total, "page": page, "per_page": per_page,
+        "total_pages": total_pages, "rows": result["rows"],
+    }
 
 
 class ESLCommand(BaseModel):

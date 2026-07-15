@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse
 
 from core.esl_client import esl
 from core import state, auth_db
+from core import reg_log_db
 from core.runtime import (
     load_server_settings,
     start_ws_server,
@@ -47,6 +48,8 @@ async def lifespan(app: FastAPI):
     # 過渡期讓 auth.db 保持「無使用者」即可全面放行，避免整合測試被鎖外，
     # 也避免重啟時無聲覆蓋管理員已調整的權限。
     auth_db.init_db()
+    # 登錄記錄（reg_log）SQLite 建表，2026-07-15 起持久化，取代原本的記憶體 list
+    reg_log_db.init_db()
     # 啟動前先載入持久化的 ESL 連線設定（若有）
     _saved = load_server_settings()
     # 初始化排程記憶體設定（從 settings.json 讀一次）
