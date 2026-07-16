@@ -185,7 +185,7 @@ async function saveSpParams(name) {
   try {
     const res = await fetch(`${API_BASE}/api/sip-profile/${name}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify(updates),
     });
     const data = await res.json();
@@ -286,7 +286,7 @@ async function restartFreeswitchForAcl(confirmed = false) {
   try {
     const res  = await fetch(`${API_BASE}/api/acl/apply-restart`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({ confirm: confirmed }),
     });
     const data = await res.json();
@@ -335,7 +335,7 @@ async function saveAclEntry() {
   try {
     const res  = await fetch(url, {
       method: isEdit ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({ cidr, note }),
     });
     const data = await res.json();
@@ -359,7 +359,10 @@ async function deleteAclEntry(cidr) {
   )) return;
 
   try {
-    const res = await fetch(`${API_BASE}/api/acl/trusted-sbc/${encodeURIComponent(cidr)}`, { method: 'DELETE' });
+    const res = await fetch(`${API_BASE}/api/acl/trusted-sbc/${encodeURIComponent(cidr)}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
+    });
     let data;
     try { data = await res.json(); }
     catch { alert(`移除失敗：伺服器錯誤（HTTP ${res.status}）`); return; }
@@ -476,7 +479,7 @@ async function createNatProfile() {
   try {
     const res = await fetch(`${API_BASE}/api/sip-profile/nat-wizard`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify(payload),
     });
     const data = await res.json();

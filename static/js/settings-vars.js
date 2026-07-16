@@ -193,7 +193,10 @@ async function rotateCDRNow() {
   const msg = document.getElementById('cdr-arch-msg');
   if (msg) msg.textContent = '執行中...';
   try {
-    const res = await fetch(`${API_BASE}/api/cdr/rotate`, { method: 'POST' });
+    const res = await fetch(`${API_BASE}/api/cdr/rotate`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
+    });
     const data = await res.json();
     if (res.ok && data.ok) {
       if (msg) msg.textContent = `✓ 已歸檔 ${data.file}`;
@@ -209,7 +212,10 @@ async function rotateCDRNow() {
 async function deleteCDRArchive(filename) {
   if (!confirm(`確定刪除 ${filename}？`)) return;
   try {
-    const res = await fetch(`${API_BASE}/api/cdr/archive/${filename}`, { method: 'DELETE' });
+    const res = await fetch(`${API_BASE}/api/cdr/archive/${filename}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
+    });
     if (res.ok) {
       renderSettings('cdr');
     } else {
@@ -746,7 +752,7 @@ async function saveXmlFile() {
   try {
     const res = await fetch(`${API_BASE}/api/dialplan/file`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({ path: _editingPath, content: area.value })
     });
     const data = await res.json();
@@ -1018,7 +1024,11 @@ async function backupRestoreUpload(input) {
   try {
     const form = new FormData();
     form.append('file', file);
-    const resp = await fetch(`${API_BASE}/api/backup/restore`, { method: 'POST', body: form });
+    const resp = await fetch(`${API_BASE}/api/backup/restore`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
+      body: form,
+    });
     const data = await resp.json();
 
     if (!resp.ok) {

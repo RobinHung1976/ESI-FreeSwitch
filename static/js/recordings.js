@@ -372,7 +372,7 @@ async function deleteRecording(path) {
   try {
     const res = await fetch(`${API_BASE}/api/recordings`, {
       method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({ path })
     });
     if (res.ok) {

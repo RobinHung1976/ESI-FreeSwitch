@@ -294,7 +294,7 @@ async function saveExt() {
   try {
     const res  = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify(payload),
     });
     const data = await res.json();
@@ -350,7 +350,7 @@ async function changeExtNumber() {
     // Step 1：建立新分機
     const createRes = await fetch(`${API_BASE}/api/extensions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify(payload),
     });
     const createData = await createRes.json();
@@ -360,7 +360,10 @@ async function changeExtNumber() {
     }
 
     // Step 2：刪除舊分機
-    const deleteRes = await fetch(`${API_BASE}/api/extensions/${oldId}`, { method: 'DELETE' });
+    const deleteRes = await fetch(`${API_BASE}/api/extensions/${oldId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
+    });
     const deleteData = await deleteRes.json();
     if (!deleteData.ok) {
       if (msg) { msg.textContent = `⚠ 新分機已建立，但舊分機 ${oldId} 刪除失敗`; msg.style.color='var(--yellow)'; }
@@ -379,7 +382,10 @@ async function deleteExt(id, filename) {
   if (!confirm(`確定要刪除分機 ${id}？\n（原檔案會備份保留）`)) return;
   try {
     const qs  = filename ? `?filename=${encodeURIComponent(filename)}` : '';
-    const res = await fetch(`${API_BASE}/api/extensions/${encodeURIComponent(id)}${qs}`, { method: 'DELETE' });
+    const res = await fetch(`${API_BASE}/api/extensions/${encodeURIComponent(id)}${qs}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
+    });
     if (data.ok) {
       switchPage('extensions');
     } else {
@@ -666,7 +672,7 @@ async function saveGroup() {
     const url    = isEdit ? `${API_BASE}/api/groups/${_editingGroupId}` : `${API_BASE}/api/groups`;
     const res    = await fetch(url, {
       method: isEdit ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify(payload),
     });
     const data = await res.json();
@@ -747,7 +753,7 @@ async function changeGroupNumber() {
     // Step 1：建立新群組
     const createRes  = await fetch(`${API_BASE}/api/groups`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify(payload),
     });
     const createData = await createRes.json();
@@ -757,7 +763,10 @@ async function changeGroupNumber() {
     }
 
     // Step 2：刪除舊群組
-    const deleteRes  = await fetch(`${API_BASE}/api/groups/${oldId}`, { method: 'DELETE' });
+    const deleteRes  = await fetch(`${API_BASE}/api/groups/${oldId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
+    });
     const deleteData = await deleteRes.json();
     if (!deleteData.ok) {
       if (msg) { msg.textContent = `⚠ 新群組已建立，但舊群組 ${oldId} 刪除失敗`; msg.style.color = 'var(--yellow)'; }
@@ -775,7 +784,10 @@ async function changeGroupNumber() {
 async function deleteGroup(id) {
   if (!confirm(`確定要刪除群組 ${id}？\n（原檔案會備份保留）`)) return;
   try {
-    const res  = await fetch(`${API_BASE}/api/groups/${id}`, { method: 'DELETE' });
+    const res  = await fetch(`${API_BASE}/api/groups/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
+    });
     const data = await res.json();
     if (data.ok) {
       switchPage('groups');

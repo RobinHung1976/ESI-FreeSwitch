@@ -416,7 +416,7 @@ function resetRegLogFilter() {
 // ── 歷史日誌：載入日期選單 ───────────────────────────────────────────────────
 async function loadLogDateList() {
   try {
-    const res  = await fetch(`${API_BASE}/api/logs/list`);
+    const res  = await fetch(`${API_BASE}/api/logs/list`, { headers: { 'Authorization': `Bearer ${getToken()}` } });
     const data = await res.json();
     const sel  = document.getElementById('hist-date-select');
     if (!sel) return;
@@ -465,7 +465,7 @@ async function searchHistoryLog(page) {
       page: _histPage,
       per_page: perPage,
     });
-    const res  = await fetch(`${API_BASE}/api/logs/history?${params}`);
+    const res  = await fetch(`${API_BASE}/api/logs/history?${params}`, { headers: { 'Authorization': `Bearer ${getToken()}` } });
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.detail || res.statusText);
@@ -572,7 +572,7 @@ async function loadLogManage() {
   if (!el) return;
 
   try {
-    const res  = await fetch(`${API_BASE}/api/logs/list`);
+    const res  = await fetch(`${API_BASE}/api/logs/list`, { headers: { 'Authorization': `Bearer ${getToken()}` } });
     const data = await res.json();
 
     // 目前 log 狀態
@@ -629,7 +629,10 @@ async function manualRotateLog() {
   const msg = document.getElementById('manage-msg');
   if (msg) msg.textContent = '執行中…';
   try {
-    const res  = await fetch(`${API_BASE}/api/logs/rotate`, { method: 'POST' });
+    const res  = await fetch(`${API_BASE}/api/logs/rotate`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
+    });
     const data = await res.json();
     if (msg) msg.textContent = res.ok
       ? `✅ 成功：已建立 ${data.file}（${data.size} bytes）`

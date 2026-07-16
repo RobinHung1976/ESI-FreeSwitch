@@ -302,7 +302,9 @@ async function loadArchiveCDR() {
 
   try {
     // 串流下載 CSV 並解析（後端回傳純文字 CSV）
-    const res = await fetch(`${API_BASE}/api/cdr/archive/download?filename=${encodeURIComponent(_archDate)}`);
+    const res = await fetch(`${API_BASE}/api/cdr/archive/download?filename=${encodeURIComponent(_archDate)}`, {
+      headers: { 'Authorization': `Bearer ${getToken()}` },
+    });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `HTTP ${res.status}`);

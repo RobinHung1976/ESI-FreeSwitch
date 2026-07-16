@@ -166,7 +166,11 @@ async function soundUpload(input) {
   formData.append('file', file);
 
   try {
-    const res = await fetch(`${API_BASE}/api/sounds/upload`, { method: 'POST', body: formData });
+    const res = await fetch(`${API_BASE}/api/sounds/upload`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
+      body: formData,
+    });
     const data = await res.json();
     if (!res.ok || !data.ok) {
       if (msg) { msg.textContent = `✗ 上傳失敗：${data.detail || '未知錯誤'}`; msg.style.color = 'var(--red)'; }
@@ -185,13 +189,19 @@ async function soundDelete(filename) {
   if (!confirm(`確定要刪除音檔「${filename}」？\n若此音檔正在被 IVR 等功能使用中，系統會先提醒您。`)) return;
 
   try {
-    let res = await fetch(`${API_BASE}/api/sounds/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+    let res = await fetch(`${API_BASE}/api/sounds/${encodeURIComponent(filename)}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
+    });
     let data = await res.json();
 
     if (res.status === 409) {
       // 音檔使用中，詢問是否強制刪除
       if (confirm(`${data.detail}\n\n是否仍要強制刪除？（可能導致該功能播放失敗）`)) {
-        res = await fetch(`${API_BASE}/api/sounds/${encodeURIComponent(filename)}?force=true`, { method: 'DELETE' });
+        res = await fetch(`${API_BASE}/api/sounds/${encodeURIComponent(filename)}?force=true`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${getToken()}` },
+        });
         data = await res.json();
       } else {
         return;

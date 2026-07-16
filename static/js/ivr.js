@@ -1533,6 +1533,7 @@ async function _ivrUploadSound(input) {
   try {
     const res = await fetch(`${API_BASE}/api/sounds/upload`, {
       method: 'POST',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
       body: formData,
     });
     const data = await res.json();
@@ -1551,12 +1552,18 @@ async function _ivrUploadSound(input) {
 async function _ivrDeleteSound(filename) {
   if (!confirm(`確定要刪除語音檔「${filename}」？`)) return;
 
-  let res = await fetch(`${API_BASE}/api/sounds/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+  let res = await fetch(`${API_BASE}/api/sounds/${encodeURIComponent(filename)}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${getToken()}` },
+  });
   let data = await res.json();
 
   if (res.status === 409) {
     if (!confirm(`${data.detail}\n\n是否仍要強制刪除？（可能導致該功能播放失敗）`)) return;
-    res  = await fetch(`${API_BASE}/api/sounds/${encodeURIComponent(filename)}?force=true`, { method: 'DELETE' });
+    res  = await fetch(`${API_BASE}/api/sounds/${encodeURIComponent(filename)}?force=true`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
+    });
     data = await res.json();
   }
 
