@@ -4,7 +4,7 @@ Dialplan 路由規則管理（類型一：外撥路由規則）
 獨立於既有 /api/dialplan/* (原始 XML 編輯) 之外，提供表單化的外撥路由規則管理。
 
 檔案格式：
-  /etc/freeswitch/dialplan/default/00_route_<id>.xml
+  /etc/freeswitch/dialplan/<context>/00_route_<id>.xml
   比照 00_group_*.xml 的做法，設定資料以 JSON 註解內嵌在 XML 檔頭：
     <!-- DASHBOARD_ROUTE_META: {...} -->
 
@@ -15,6 +15,10 @@ Dialplan 路由規則管理（類型一：外撥路由規則）
     避免「衝突檢查說會衝突，但測試卻顯示不衝突」這種兩套邏輯各自飄走的情況。
   - 停用 (enabled=false) 的規則仍會寫入檔案，但 destination_number 的 condition
     會包進恆不成立的條件，等同停用且不需要每次啟用/停用都增刪檔案。
+  - 2026-07-15：新增多 context 支援。規則實際寫入的資料夾由 context 欄位決定
+    （/etc/freeswitch/dialplan/<context>/），列表/衝突檢查/legacy 掃描皆改為
+    跨所有 context 資料夾進行。衝突檢查只在「同一 context」內視為真正衝突，
+    跨 context 的號碼樣式重疊僅回傳為參考資訊（other_context_matches），不阻擋儲存。
 """
 
 import os
@@ -39,18 +43,60 @@ from core.permissions import Module
 
 router = APIRouter()
 
-ROUTE_DIR = "/etc/freeswitch/dialplan/default"
+DIALPLAN_ROOT = "/etc/freeswitch/dialplan"
+ROUTE_DIR = f"{DIALPLAN_ROOT}/default"   # 保留給預設 context 參考用，實際路徑改由 _route_dir() 動態決定
 ROUTE_META_RE = r"<!--\s*DASHBOARD_ROUTE_META:\s*(\{.*?\})\s*-->"
 ROUTE_FILE_PREFIX = "00_route_"
+DEFAULT_CONTEXT = "default"
+CONTEXT_NAME_RE = r"^[A-Za-z0-9_\-]+$"
 
 PATTERN_TYPES = ("prefix", "exact", "any", "custom_regex")
 
+
+# ════════════════════════════════════════════════════════════════════════════
+# Context 資料夾（多 context 支援）
+# ════════════════════════════════════════════════════════════════════════════
+
+def _route_dir(context: str) -> str:
+    """依 context 決定路由規則檔案要寫入哪個 dialplan 子資料夾。"""
+    ctx = (context or DEFAULT_CONTEXT).strip()
+    if not re.match(CONTEXT_NAME_RE, ctx):
+        raise ValueError(f"context 名稱格式錯誤：{ctx}")
+    return os.path.join(DIALPLAN_ROOT, ctx)
+
+
+def list_contexts() -> List[str]:
+    """掃描 /etc/freeswitch/dialplan/ 底下實際存在的子資料夾，當作可選 context 清單。
+    路由規則／自定義 Dialplan 兩個前端 Tab 共用這份清單。"""
+    try:
+        names = sorted(
+            d for d in os.listdir(DIALPLAN_ROOT)
+            if os.path.isdir(os.path.join(DIALPLAN_ROOT, d))
+        )
+    except FileNotFoundError:
+        names = []
+    if DEFAULT_CONTEXT not in names:
+        names.insert(0, DEFAULT_CONTEXT)
+    return names
+
+
+def create_context_dir(context: str) -> str:
+    """建立新的 context 資料夾（純 mkdir，不做任何 SIP Profile／轉接綁定）。
+    只給「自定義 Dialplan」頁面呼叫；路由規則頁面只能選既有 context，不能建立新的。"""
+    ctx = (context or "").strip()
+    if not ctx or not re.match(CONTEXT_NAME_RE, ctx):
+        raise ValueError("context 名稱僅能包含英數字、底線、連字號")
+    path = os.path.join(DIALPLAN_ROOT, ctx)
+    if os.path.isdir(path):
+        raise ValueError(f"context「{ctx}」已存在")
+    os.makedirs(path, exist_ok=False)
+    return path
+
+
 # 掃描自定義（未被 Dashboard 任何模組管理）dialplan 檔案時要排除的目錄/檔名
 def _legacy_scan_dirs() -> List[str]:
-    """回傳要掃描的舊有 dialplan 目錄。預設跟著 ROUTE_DIR 的同層 default/public，
-    使用函式而非寫死常數，方便測試時透過修改 ROUTE_DIR 一併重導向。"""
-    base = os.path.dirname(ROUTE_DIR.rstrip("/"))  # .../dialplan
-    return [os.path.join(base, "default"), os.path.join(base, "public")]
+    """回傳要掃描的舊有 dialplan 目錄：所有實際存在的 context 資料夾。"""
+    return [os.path.join(DIALPLAN_ROOT, ctx) for ctx in list_contexts()]
 # FreeSwitch 官方內建範例檔（不掃描，避免把整包 default.xml/public.xml 範例規則誤判成自定義路由）
 LEGACY_SKIP_FILENAMES = {"default.xml", "public.xml"}
 # 其他 Dashboard 模組已管理的檔名前綴，避免重複認領
@@ -104,6 +150,14 @@ class RouteRule(BaseModel):
         pt = info.data.get("pattern_type")
         if pt in ("prefix", "exact", "custom_regex") and not v.strip():
             raise ValueError(f"pattern_type={pt} 時 pattern_value 不可為空")
+        return v
+
+    @field_validator("context")
+    @classmethod
+    def _context_format(cls, v):
+        v = (v or DEFAULT_CONTEXT).strip()
+        if not re.match(CONTEXT_NAME_RE, v):
+            raise ValueError("context 名稱僅能包含英數字、底線、連字號")
         return v
 
 
@@ -173,15 +227,21 @@ def _compile_safe(pattern: str):
 
 
 def find_conflicts(pattern_type: str, pattern_value: str,
-                    existing_routes: List[dict], self_id: str = "") -> List[dict]:
-    """回傳所有與新規則 pattern 重疊的既有規則。"""
+                    existing_routes: List[dict], context: str = None,
+                    self_id: str = "") -> dict:
+    """回傳 {'same_context': [...], 'other_context': [...]}。
+
+    context=None 時視為不分組（全部歸入 same_context，等同舊行為，供未傳 context
+    的呼叫端相容）；傳入 context 時，只有 context 相同的重疊才算真正衝突，
+    不同 context 的重疊只回傳為參考資訊，不阻擋儲存。
+    """
     new_regex_str = build_regex(pattern_type, pattern_value)
     new_re = _compile_safe(new_regex_str)
     if new_re is None:
         raise ValueError("正規式編譯失敗，請檢查語法")
 
     new_samples = generate_sample_numbers(pattern_type, pattern_value)
-    conflicts = []
+    same_context, other_context = [], []
 
     for route in existing_routes:
         if self_id and route.get("id") == self_id:
@@ -197,17 +257,24 @@ def find_conflicts(pattern_type: str, pattern_value: str,
 
         hit = any(exist_re.match(s) for s in new_samples) or \
               any(new_re.match(s) for s in exist_samples)
+        if not hit:
+            continue
 
-        if hit:
-            conflicts.append({
-                "id": route.get("id"),
-                "name": route.get("name"),
-                "pattern_type": route.get("pattern_type"),
-                "pattern_value": route.get("pattern_value"),
-                "priority": route.get("priority"),
-                "enabled": route.get("enabled", True),
-            })
-    return conflicts
+        entry = {
+            "id": route.get("id"),
+            "name": route.get("name"),
+            "pattern_type": route.get("pattern_type"),
+            "pattern_value": route.get("pattern_value"),
+            "priority": route.get("priority"),
+            "enabled": route.get("enabled", True),
+            "context": route.get("context", DEFAULT_CONTEXT),
+        }
+        if context is None or route.get("context", DEFAULT_CONTEXT) == context:
+            same_context.append(entry)
+        else:
+            other_context.append(entry)
+
+    return {"same_context": same_context, "other_context": other_context}
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -432,7 +499,7 @@ def _parse_legacy_route_file(filepath: str, gw_lookup: dict) -> Optional[dict]:
         "toll_allow": toll_allow_value,
         "enabled": True,
         "priority": 100,                  # 舊檔案無優先序資訊，給預設值；升級時可調整
-        "context": "default" if "/default/" in filepath else "public",
+        "context": os.path.basename(os.path.dirname(filepath)) or DEFAULT_CONTEXT,
         "path": filepath,
         "filename": os.path.basename(filepath),
         "legacy": True,                   # 標記為「尚未升級」，前端據此顯示升級提示/限制編輯方式
@@ -475,15 +542,18 @@ def _scan_legacy_routes() -> List[dict]:
 
 def _load_all_routes(include_legacy: bool = True) -> List[dict]:
     """讀取所有路由規則，依 priority 由小到大排序（數字越小越優先）。
-    include_legacy=True 時會一併納入尚未升級的舊有手寫 dialplan 檔案（如 DP_AC220.xml）。"""
+    跨所有 context 資料夾掃描；include_legacy=True 時會一併納入尚未升級的舊有手寫
+    dialplan 檔案（如 DP_AC220.xml）。"""
     result = []
-    for filepath in sorted(glob.glob(f"{ROUTE_DIR}/{ROUTE_FILE_PREFIX}*.xml")):
-        try:
-            meta = _read_route_meta(filepath)
-            if meta:
-                result.append(meta)
-        except Exception:
-            pass
+    for ctx in list_contexts():
+        pattern = os.path.join(DIALPLAN_ROOT, ctx, f"{ROUTE_FILE_PREFIX}*.xml")
+        for filepath in sorted(glob.glob(pattern)):
+            try:
+                meta = _read_route_meta(filepath)
+                if meta:
+                    result.append(meta)
+            except Exception:
+                pass
 
     if include_legacy:
         try:
@@ -495,12 +565,24 @@ def _load_all_routes(include_legacy: bool = True) -> List[dict]:
     return result
 
 
-def _route_filepath(route_id: str) -> str:
-    return f"{ROUTE_DIR}/{ROUTE_FILE_PREFIX}{route_id}.xml"
+def _route_filepath(route_id: str, context: str = None) -> str:
+    """依 route_id 產生檔案路徑。
+    - 提供 context：直接組出目標路徑（新增規則／搬移到新 context 時使用）
+    - 不提供 context：跨所有 context 資料夾掃描既有檔案（更新/刪除/查詢/toggle 用），
+      找不到就回傳預設 context 下的路徑，讓呼叫端用 os.path.exists 判斷後回 404。
+    """
+    if context is not None:
+        return os.path.join(_route_dir(context), f"{ROUTE_FILE_PREFIX}{route_id}.xml")
+    for ctx in list_contexts():
+        candidate = os.path.join(DIALPLAN_ROOT, ctx, f"{ROUTE_FILE_PREFIX}{route_id}.xml")
+        if os.path.exists(candidate):
+            return candidate
+    return os.path.join(_route_dir(DEFAULT_CONTEXT), f"{ROUTE_FILE_PREFIX}{route_id}.xml")
 
 
 def _gen_route_id() -> str:
-    """產生一個簡短且不衝突的 route id（時間戳基底，避免額外資料庫）。"""
+    """產生一個簡短且不衝突的 route id（時間戳基底，避免額外資料庫）。
+    跨所有 context 資料夾檢查是否已存在同名檔案。"""
     ts = datetime.now().strftime("%y%m%d%H%M%S")
     candidate = f"r{ts}"
     n = 0
@@ -514,9 +596,33 @@ def _gen_route_id() -> str:
 # API 端點
 # ════════════════════════════════════════════════════════════════════════════
 
+@router.get("/api/dialplan/contexts", dependencies=[Depends(require_permission(Module.DIALPLAN, "read"))])
+def get_contexts():
+    """回傳目前 /etc/freeswitch/dialplan/ 底下實際存在的 context 清單，
+    供路由規則／自定義 Dialplan 兩個前端 Tab 共用。"""
+    return {"contexts": list_contexts()}
+
+
+@router.post("/api/dialplan/contexts", dependencies=[Depends(require_permission(Module.DIALPLAN, "create"))])
+def create_context(context: str = Body(..., embed=True)):
+    """建立新的 context 資料夾（純 mkdir）。只給「自定義 Dialplan」頁面呼叫，
+    路由規則頁面只能從既有清單選擇，不提供建立入口。"""
+    try:
+        path = create_context_dir(context)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {
+        "ok": True,
+        "context": context.strip(),
+        "path": path,
+        "warning": "已建立資料夾，但尚未與任何來源綁定。請自行到 SIP Profile 或其他 dialplan 設定"
+                   "中，讓某個來源實際指向這個 context 名稱，通話才會真正進入此 context。",
+    }
+
+
 @router.get("/api/dialplan/routes", dependencies=[Depends(require_permission(Module.DIALPLAN, "read"))])
 def list_routes():
-    """列出所有外撥路由規則（依優先順序排序）。"""
+    """列出所有外撥路由規則（依優先順序排序，跨所有 context）。"""
     routes = _load_all_routes()
     return {"routes": routes, "total": len(routes)}
 
@@ -542,24 +648,27 @@ def get_route(route_id: str):
 def check_conflict(
     pattern_type: str = Body(...),
     pattern_value: str = Body(default=""),
+    context: str = Body(default=DEFAULT_CONTEXT),
     self_id: str = Body(default=""),
 ):
-    """檢查新／編輯中的 pattern 是否與既有路由規則重疊。"""
+    """檢查新／編輯中的 pattern 是否與既有路由規則重疊。
+    只有同一 context 內的重疊才會回傳在 conflicts（會阻擋儲存）；
+    跨 context 的重疊回傳在 other_context_matches，僅供參考，不阻擋。"""
     try:
-        # 先確保自身 regex 合法
         build_regex(pattern_type, pattern_value)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     existing = _load_all_routes()
     try:
-        conflicts = find_conflicts(pattern_type, pattern_value, existing, self_id=self_id)
+        result = find_conflicts(pattern_type, pattern_value, existing, context=context, self_id=self_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     return {
-        "has_conflict": len(conflicts) > 0,
-        "conflicts": conflicts,
+        "has_conflict": len(result["same_context"]) > 0,
+        "conflicts": result["same_context"],
+        "other_context_matches": result["other_context"],
         "note": "自訂正規式採取樣比對，無法窮舉所有號碼，建議搭配下方路由測試工具手動驗證。" if pattern_type == "custom_regex" else None,
     }
 
@@ -619,28 +728,35 @@ def test_route_number(number: str = Body(..., embed=True)):
 
 @router.post("/api/dialplan/routes", dependencies=[Depends(require_permission(Module.DIALPLAN, "create"))])
 def create_route(data: RouteRule):
-    """新增外撥路由規則（含正規式驗證 + 與既有規則衝突檢查）。"""
+    """新增外撥路由規則（含正規式驗證 + 與既有規則衝突檢查；依 context 寫入對應資料夾）。"""
     try:
         build_regex(data.pattern_type, data.pattern_value)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    if data.context not in list_contexts():
+        raise HTTPException(status_code=400, detail=f"context「{data.context}」不存在，請先到「自定義 Dialplan」頁面建立")
+
     existing = _load_all_routes()
     try:
-        conflicts = find_conflicts(data.pattern_type, data.pattern_value, existing)
+        result = find_conflicts(data.pattern_type, data.pattern_value, existing, context=data.context)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    conflicts = result["same_context"]
     if conflicts:
         names = "、".join(f"「{c['name']}」" for c in conflicts)
         raise HTTPException(
             status_code=409,
-            detail=f"此號碼樣式與既有路由規則重疊：{names}。請調整號碼樣式或使用路由測試工具確認，"
+            detail=f"此號碼樣式與同一 context（{data.context}）既有路由規則重疊：{names}。請調整號碼樣式或使用路由測試工具確認，"
                    f"若仍要新增，請先停用或調整衝突規則。",
         )
 
     data.id = _gen_route_id()
-    filepath = _route_filepath(data.id)
-    os.makedirs(ROUTE_DIR, exist_ok=True)
+    try:
+        filepath = _route_filepath(data.id, data.context)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
     write_route_xml(data, filepath)
     # 新增沒有前一版備份可還原，rollback 就是刪除剛才寫入的新檔（rollback_new_file 處理）
     try:
@@ -653,14 +769,15 @@ def create_route(data: RouteRule):
 
 @router.put("/api/dialplan/routes/{route_id}", dependencies=[Depends(require_permission(Module.DIALPLAN, "update"))])
 def update_route(route_id: str, data: RouteRule):
-    """更新外撥路由規則（自動排除自身做衝突檢查；覆寫前備份）。"""
+    """更新外撥路由規則（自動排除自身做衝突檢查；覆寫前備份）。
+    若 context 有變更，會把檔案從舊 context 資料夾搬到新的資料夾。"""
     if route_id.startswith("legacy:"):
         raise HTTPException(
             status_code=400,
             detail="此規則尚未升級成 Dashboard 格式，請使用「升級並儲存」功能（POST .../legacy/upgrade）。",
         )
-    filepath = _route_filepath(route_id)
-    if not os.path.exists(filepath):
+    old_filepath = _route_filepath(route_id)
+    if not os.path.exists(old_filepath):
         raise HTTPException(status_code=404, detail=f"路由規則 {route_id} 不存在")
 
     try:
@@ -668,24 +785,49 @@ def update_route(route_id: str, data: RouteRule):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    if data.context not in list_contexts():
+        raise HTTPException(status_code=400, detail=f"context「{data.context}」不存在，請先到「自定義 Dialplan」頁面建立")
+
     existing = _load_all_routes()
     try:
-        conflicts = find_conflicts(data.pattern_type, data.pattern_value, existing, self_id=route_id)
+        result = find_conflicts(data.pattern_type, data.pattern_value, existing, context=data.context, self_id=route_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    conflicts = result["same_context"]
     if conflicts:
         names = "、".join(f"「{c['name']}」" for c in conflicts)
         raise HTTPException(
             status_code=409,
-            detail=f"此號碼樣式與既有路由規則重疊：{names}。請調整號碼樣式或先停用衝突規則。",
+            detail=f"此號碼樣式與同一 context（{data.context}）既有路由規則重疊：{names}。請調整號碼樣式或先停用衝突規則。",
         )
 
-    backup = make_backup(filepath)
-
     data.id = route_id
-    write_route_xml(data, filepath)
-    reload_and_verify(filepath, backup)
-    return {"ok": True, "id": route_id, "backup": backup}
+    try:
+        new_filepath = _route_filepath(route_id, data.context)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if new_filepath == old_filepath:
+        # context 未變更：原地覆寫，行為與升級多 context 支援前完全一致
+        backup = make_backup(old_filepath)
+        write_route_xml(data, old_filepath)
+        reload_and_verify(old_filepath, backup)
+        return {"ok": True, "id": route_id, "backup": backup}
+
+    # context 有變更：檔案要搬到新的 context 資料夾。
+    # 先在新位置寫入並驗證 reload 成功，再刪除舊檔案，避免中途失敗兩邊都壞掉。
+    os.makedirs(os.path.dirname(new_filepath), exist_ok=True)
+    write_route_xml(data, new_filepath)
+    try:
+        reload_and_verify(new_filepath, backup_path="")
+    except HTTPException:
+        rollback_new_file(new_filepath)
+        raise
+
+    old_backup = make_backup(old_filepath, suffix="bak.moved")
+    os.remove(old_filepath)
+    force_reload()
+    return {"ok": True, "id": route_id, "backup": old_backup, "moved_to_context": data.context}
 
 
 @router.post("/api/dialplan/routes/legacy/upgrade", dependencies=[Depends(require_permission(Module.DIALPLAN, "update"))])
@@ -695,7 +837,7 @@ def upgrade_legacy_route(legacy_id: str = Body(...), data: RouteRule = Body(...)
     流程：
       1. 驗證新 pattern 合法且不與「其他」既有規則衝突（排除自己這個 legacy 檔案）
       2. 備份原始舊檔案（保留在原處，副檔名加 .bak.upgraded.<timestamp>，不刪除，方便回溯比對）
-      3. 寫入新的 00_route_<id>.xml（正式納入 Dashboard 管理格式 + META）
+      3. 寫入新的 00_route_<id>.xml（依 context 寫進對應資料夾，正式納入 Dashboard 管理格式 + META）
       4. 移除原始舊檔案（已備份），reloadxml
     """
     if not legacy_id.startswith("legacy:"):
@@ -716,25 +858,32 @@ def upgrade_legacy_route(legacy_id: str = Body(...), data: RouteRule = Body(...)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    if data.context not in list_contexts():
+        raise HTTPException(status_code=400, detail=f"context「{data.context}」不存在，請先到「自定義 Dialplan」頁面建立")
+
     # 衝突檢查時排除自己這個 legacy 檔案（用 legacy_id 當 self_id）
     existing = _load_all_routes()
     try:
-        conflicts = find_conflicts(data.pattern_type, data.pattern_value, existing, self_id=legacy_id)
+        result = find_conflicts(data.pattern_type, data.pattern_value, existing, context=data.context, self_id=legacy_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    conflicts = result["same_context"]
     if conflicts:
         names = "、".join(f"「{c['name']}」" for c in conflicts)
         raise HTTPException(
             status_code=409,
-            detail=f"此號碼樣式與既有路由規則重疊：{names}。請調整號碼樣式或先停用衝突規則後再升級。",
+            detail=f"此號碼樣式與同一 context（{data.context}）既有路由規則重疊：{names}。請調整號碼樣式或先停用衝突規則後再升級。",
         )
 
     # 備份原始舊檔案（保留不刪，標註為已升級，方便日後對照原始寫法）
     backup = make_backup(legacy_filepath, suffix="bak.upgraded")
 
     data.id = _gen_route_id()
-    new_filepath = _route_filepath(data.id)
-    os.makedirs(ROUTE_DIR, exist_ok=True)
+    try:
+        new_filepath = _route_filepath(data.id, data.context)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    os.makedirs(os.path.dirname(new_filepath), exist_ok=True)
     write_route_xml(data, new_filepath)
 
     # 移除原始舊檔案（已備份，避免兩條規則同時存在造成 dialplan 重複比對）
@@ -805,7 +954,7 @@ def toggle_route(route_id: str, enabled: bool = Body(..., embed=True)):
         toll_allow=meta.get("toll_allow", ""),
         enabled=enabled,
         priority=meta.get("priority", 100),
-        context=meta.get("context", "default"),
+        context=meta.get("context", DEFAULT_CONTEXT),
     )
     backup = make_backup(filepath)
     write_route_xml(data, filepath)

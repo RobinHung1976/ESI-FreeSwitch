@@ -58,19 +58,27 @@ const PATTERN_TYPE_META = {
 let _routeGatewayCache = null;   // /api/gateway/list 快取
 let _routeEditingId    = null;   // 目前編輯中的路由 id（新增模式為 null）
 let _routeConflictTimer = null;  // debounce timer
+let _routeContextCache   = [];      // /api/dialplan/contexts 快取
+let _routeAllRoutesCache = [];      // 最近一次 /api/dialplan/routes 回應，供前端篩選/分組用
+let _routeCurrentFilter  = 'default'; // 目前選取的 context，或 '__all__'
+let _routeCameFromOverview = false;   // 是否是從「全部 context」總覽點卡片下鑽進來的
 
 // ── 頁面進入點 ──────────────────────────────────────────────────────────────
 async function renderDialplanRoutes(mountId = 'mainContent') {
   document.getElementById(mountId).innerHTML =
     '<div style="padding:40px;text-align:center;color:var(--muted)">載入中...</div>';
 
-  const [routeData, gwData] = await Promise.all([
+  const [routeData, gwData, ctxData] = await Promise.all([
     apiFetch('/api/dialplan/routes'),
     apiFetch('/api/gateway/list'),
+    apiFetch('/api/dialplan/contexts'),
   ]);
 
   const routes = (routeData && routeData.routes) ? routeData.routes : [];
-  _routeGatewayCache = (gwData && gwData.gateways) ? gwData.gateways : [];
+  _routeGatewayCache   = (gwData && gwData.gateways) ? gwData.gateways : [];
+  _routeContextCache   = (ctxData && ctxData.contexts) ? ctxData.contexts : ['default'];
+  _routeAllRoutesCache = routes;
+  _routeCurrentFilter  = _routeDefaultFilterContext(routes);
 
   document.getElementById(mountId).innerHTML = `
   <!-- 列表面板 -->
@@ -100,24 +108,15 @@ async function renderDialplanRoutes(mountId = 'mainContent') {
         <span class="panel-title">外撥路由規則</span>
         <span class="panel-badge">${routes.length} 條規則</span>
         <div class="panel-actions">
+          ${_routeFilterSelectHtml()}
           <button class="btn" onclick="switchPage('dialplan_routes')">↺ 刷新</button>
           <button class="btn primary" onclick="openRouteEditor(null)">+ 新增路由規則</button>
         </div>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>優先序</th><th>名稱</th><th>號碼樣式</th><th>目標 Gateway</th>
-              <th>來電顯示</th><th>狀態</th><th>操作</th>
-            </tr>
-          </thead>
-          <tbody>${_routeRowsHtml(routes)}</tbody>
-        </table>
-      </div>
+      <div id="route-table-region"></div>
       <div style="padding:10px 16px;font-size:11px;color:var(--muted)">
         ℹ️ 規則依優先序（數字越小越優先）由上而下比對，第一個符合的規則即生效。
-        若多條規則的號碼範圍重疊，新增/編輯時會即時提示衝突。
+        若多條規則的號碼範圍重疊，新增/編輯時會即時提示衝突（僅同一 context 內的規則視為衝突，跨 context 僅供參考）。
       </div>
     </div>
   </div>
@@ -180,6 +179,12 @@ async function renderDialplanRoutes(mountId = 'mainContent') {
         </div>` : ''}
 
         <div class="settings-row">
+          <span class="settings-label">Context *</span>
+          <select class="settings-select" id="route-context" style="max-width:200px" onchange="onRoutePatternInput()"></select>
+          <span style="font-size:11px;color:var(--muted)">決定寫入哪個 dialplan context 資料夾；新增 context 請到「自定義 Dialplan」頁面</span>
+        </div>
+
+        <div class="settings-row">
           <span class="settings-label">來電顯示覆寫</span>
           <input class="settings-input" id="route-caller-id" placeholder="留空則使用預設來電顯示">
         </div>
@@ -233,18 +238,20 @@ async function renderDialplanRoutes(mountId = 'mainContent') {
     </div>
   </div>`;
 
+  _renderRouteListRegion();
   onRoutePatternTypeChange();
 }
 
 function _routeRowsHtml(routes) {
   if (routes.length === 0) {
-    return `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">尚無路由規則</td></tr>`;
+    return `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">尚無路由規則</td></tr>`;
   }
   return routes.map(r => {
     const ptMeta = PATTERN_TYPE_META[r.pattern_type] || { label: r.pattern_type };
     const patternDisplay = r.pattern_type === 'any'
       ? '任意號碼'
       : `${ptMeta.label}：${r.pattern_value}`;
+    const ctxLabel = r.context || 'default';
 
     if (r.legacy) {
       return `<tr style="background:rgba(230,81,0,0.06)">
@@ -255,6 +262,7 @@ function _routeRowsHtml(routes) {
             ⚠️ 未納入管理（來源：${_escHtml(r.filename)}）
           </span>
         </td>
+        <td style="font-size:11px;color:var(--label)">${_escHtml(ctxLabel)}</td>
         <td style="font-size:12px;color:var(--label)">${_escHtml(patternDisplay)}</td>
         <td style="font-size:12px">${_escHtml(r.gateway_name)}</td>
         <td style="font-size:11px;color:var(--muted)">${_escHtml(r.caller_id_override) || '—'}</td>
@@ -273,6 +281,7 @@ function _routeRowsHtml(routes) {
     return `<tr>
       <td style="color:var(--accent-bright);font-weight:600">${r.priority}</td>
       <td style="color:#fff;font-weight:600">${_escHtml(r.name)}</td>
+      <td style="font-size:11px;color:var(--label)">${_escHtml(ctxLabel)}</td>
       <td style="font-size:12px;color:var(--label)">${_escHtml(patternDisplay)}</td>
       <td style="font-size:12px">${_escHtml(r.gateway_name)}</td>
       <td style="font-size:11px;color:var(--muted)">${_escHtml(r.caller_id_override) || '—'}</td>
@@ -294,6 +303,121 @@ function _escHtml(s) {
 }
 function _escAttr(s) {
   return _escHtml(s).replace(/'/g, '&#39;');
+}
+
+// ── Context 篩選／全部總覽卡片／下鑽／麵包屑 ─────────────────────────────────
+function _routeContextCounts(routes) {
+  const counts = {};
+  routes.forEach(r => {
+    const c = r.context || 'default';
+    counts[c] = (counts[c] || 0) + 1;
+  });
+  return counts;
+}
+
+function _routeDefaultFilterContext(routes) {
+  const counts = _routeContextCounts(routes);
+  const contexts = Object.keys(counts);
+  if (contexts.length <= 1) return contexts[0] || 'default';
+  // 有多個 context 時，預設顯示規則數最多的那個，維持接近單一 context 時的既有體驗
+  return contexts.sort((a, b) => counts[b] - counts[a])[0];
+}
+
+function _routeContextOptionsHtml(selected) {
+  const list = _routeContextCache.length ? _routeContextCache : ['default'];
+  return list.map(c =>
+    `<option value="${_escAttr(c)}" ${c === selected ? 'selected' : ''}>${_escHtml(c)}</option>`
+  ).join('');
+}
+
+function _routeFilterSelectHtml() {
+  const counts = _routeContextCounts(_routeAllRoutesCache);
+  const known  = _routeContextCache.length ? _routeContextCache : Object.keys(counts);
+  const opts = known.map(c =>
+    `<option value="${_escAttr(c)}" ${c === _routeCurrentFilter ? 'selected' : ''}>${_escHtml(c)}（${counts[c] || 0}）</option>`
+  ).join('');
+  return `
+    <select class="settings-select" id="route-context-filter" style="max-width:200px" onchange="onRouteContextFilterChange()">
+      ${opts}
+      <option value="__all__" ${_routeCurrentFilter === '__all__' ? 'selected' : ''}>🗂 全部 context</option>
+    </select>`;
+}
+
+function onRouteContextFilterChange() {
+  const sel = document.getElementById('route-context-filter');
+  if (!sel) return;
+  _routeCurrentFilter = sel.value;
+  _routeCameFromOverview = false;
+  _renderRouteListRegion();
+}
+
+function _renderRouteListRegion() {
+  const region = document.getElementById('route-table-region');
+  if (!region) return;
+  region.innerHTML = _routeCurrentFilter === '__all__'
+    ? _routeOverviewCardsHtml()
+    : _routeFlatTableHtml(_routeCurrentFilter);
+}
+
+function _routeOverviewCardsHtml() {
+  const counts = _routeContextCounts(_routeAllRoutesCache);
+  const contexts = Object.keys(counts).sort();
+  if (contexts.length === 0) {
+    return `<div style="padding:30px;text-align:center;color:var(--muted)">尚無路由規則</div>`;
+  }
+  const cards = contexts.map(ctx => {
+    const rs = _routeAllRoutesCache.filter(r => (r.context || 'default') === ctx);
+    const enabledCount = rs.filter(r => r.enabled !== false).length;
+    return `
+    <div style="border:1px solid var(--border);border-radius:8px;padding:16px;cursor:pointer;
+                background:var(--panel2);transition:border-color .15s"
+      onmouseover="this.style.borderColor='var(--accent)'"
+      onmouseout="this.style.borderColor='var(--border)'"
+      onclick="_routeDrillIntoContext('${_escAttr(ctx)}')">
+      <div style="font-weight:600;font-size:14px;color:var(--text);margin-bottom:4px">📁 ${_escHtml(ctx)}</div>
+      <div style="font-size:12px;color:var(--muted)">${rs.length} 條規則・${enabledCount} 啟用</div>
+    </div>`;
+  }).join('');
+  return `<div style="padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">${cards}</div>`;
+}
+
+function _routeDrillIntoContext(ctx) {
+  _routeCurrentFilter = ctx;
+  _routeCameFromOverview = true;
+  const sel = document.getElementById('route-context-filter');
+  if (sel) sel.value = ctx;
+  _renderRouteListRegion();
+}
+
+function _routeBackToOverview() {
+  _routeCurrentFilter = '__all__';
+  _routeCameFromOverview = false;
+  const sel = document.getElementById('route-context-filter');
+  if (sel) sel.value = '__all__';
+  _renderRouteListRegion();
+}
+
+function _routeFlatTableHtml(ctx) {
+  const filtered = _routeAllRoutesCache.filter(r => (r.context || 'default') === ctx);
+  const breadcrumb = _routeCameFromOverview ? `
+    <div style="padding:8px 16px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px;
+                border-bottom:1px solid var(--border)">
+      🛣 路由規則 <span style="color:var(--muted)">›</span> <strong style="color:#fff">${_escHtml(ctx)}</strong>
+      <button class="btn" style="padding:2px 8px;font-size:11px;margin-left:auto" onclick="_routeBackToOverview()">← 返回總覽</button>
+    </div>` : '';
+  return `
+    ${breadcrumb}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>優先序</th><th>名稱</th><th>Context</th><th>號碼樣式</th><th>目標 Gateway</th>
+            <th>來電顯示</th><th>狀態</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody>${_routeRowsHtml(filtered)}</tbody>
+      </table>
+    </div>`;
 }
 
 // ── 編輯面板：開啟/關閉 ──────────────────────────────────────────────────────
@@ -325,6 +449,7 @@ async function openRouteEditor(id) {
     document.getElementById('route-toll-allow').value    = data.toll_allow || '';
     document.getElementById('route-priority').value      = data.priority || 100;
     document.getElementById('route-enabled').value       = String(data.enabled !== false);
+    document.getElementById('route-context').innerHTML   = _routeContextOptionsHtml(data.context || 'default');
   } else {
     if (title) title.textContent = '新增路由規則';
     document.getElementById('route-name').value          = '';
@@ -335,6 +460,8 @@ async function openRouteEditor(id) {
     document.getElementById('route-toll-allow').value    = '';
     document.getElementById('route-priority').value      = 100;
     document.getElementById('route-enabled').value       = 'true';
+    document.getElementById('route-context').innerHTML   =
+      _routeContextOptionsHtml(_routeCurrentFilter && _routeCurrentFilter !== '__all__' ? _routeCurrentFilter : 'default');
   }
 
   document.getElementById('route-inline-test-number').value = '';
@@ -369,6 +496,7 @@ async function openRouteUpgradeEditor(legacyId) {
   document.getElementById('route-toll-allow').value    = data.toll_allow || '';
   document.getElementById('route-priority').value      = data.priority || 100;
   document.getElementById('route-enabled').value       = 'true';
+  document.getElementById('route-context').innerHTML   = _routeContextOptionsHtml(data.context || 'default');
 
   const upgradeNotice = document.getElementById('route-upgrade-notice');
   if (upgradeNotice) {
@@ -441,6 +569,7 @@ async function _checkRouteConflict() {
   const div = document.getElementById('route-conflict-warning');
   const patternType  = document.getElementById('route-pattern-type').value;
   const patternValue = document.getElementById('route-pattern-value').value.trim();
+  const context      = document.getElementById('route-context')?.value || 'default';
 
   if (patternType !== 'any' && !patternValue) {
     div.innerHTML = '';
@@ -454,6 +583,7 @@ async function _checkRouteConflict() {
       body: JSON.stringify({
         pattern_type: patternType,
         pattern_value: patternValue,
+        context,
         self_id: _routeUpgradingLegacyId || _routeEditingId || '',
       }),
     });
@@ -464,24 +594,37 @@ async function _checkRouteConflict() {
       return;
     }
 
+    let html = '';
+
     if (!data.has_conflict) {
-      div.innerHTML = `<span style="font-size:11px;color:var(--green)">✓ 號碼樣式未與既有規則重疊</span>`;
-      return;
-    }
-
-    const list = data.conflicts.map(c =>
-      `<li>「${_escHtml(c.name)}」（優先序 ${c.priority}，${c.enabled ? '啟用中' : '已停用'}）— ${_escHtml(c.pattern_value || '任意')}</li>`
-    ).join('');
-
-    div.innerHTML = `
+      html += `<span style="font-size:11px;color:var(--green)">✓ 號碼樣式未與同一 context 的既有規則重疊</span>`;
+    } else {
+      const list = data.conflicts.map(c =>
+        `<li>「${_escHtml(c.name)}」（優先序 ${c.priority}，${c.enabled ? '啟用中' : '已停用'}）— ${_escHtml(c.pattern_value || '任意')}</li>`
+      ).join('');
+      html += `
       <div style="padding:8px 10px;background:#ffebee;border:1px solid #ef9a9a;border-radius:4px">
-        <div style="font-size:12px;color:#c62828;font-weight:600">⚠️ 此號碼樣式與下列規則重疊：</div>
+        <div style="font-size:12px;color:#c62828;font-weight:600">⚠️ 此號碼樣式與下列同 context 規則重疊：</div>
         <ul style="margin:4px 0 4px 18px;font-size:12px;color:#c62828">${list}</ul>
         ${data.note ? `<div style="font-size:11px;color:#c62828;margin-top:2px">${_escHtml(data.note)}</div>` : ''}
         <div style="font-size:11px;color:#c62828;margin-top:4px">
           可用下方「快速測試」欄位輸入實際號碼，確認目前會被哪一條規則攔截。
         </div>
       </div>`;
+    }
+
+    if (data.other_context_matches && data.other_context_matches.length) {
+      const otherList = data.other_context_matches.map(c =>
+        `<li>「${_escHtml(c.name)}」（context: ${_escHtml(c.context)}，優先序 ${c.priority}）</li>`
+      ).join('');
+      html += `
+      <div style="padding:8px 10px;background:#e3f2fd;border:1px solid #90caf9;border-radius:4px;margin-top:6px">
+        <div style="font-size:11px;color:#1565c0">ℹ️ 以下規則號碼樣式相同，但屬於其他 context，不影響本次判斷：</div>
+        <ul style="margin:4px 0 0 18px;font-size:11px;color:#1565c0">${otherList}</ul>
+      </div>`;
+    }
+
+    div.innerHTML = html;
   } catch (e) {
     div.innerHTML = `<div style="font-size:12px;color:var(--red)">⚠️ 衝突檢查失敗：${e.message}</div>`;
   }
@@ -589,10 +732,11 @@ async function saveRoute() {
   if (!gatewayName) { alert('請選擇目標 Gateway'); return; }
   if (!priority || priority < 1 || priority > 999) { alert('優先順序須介於 1-999'); return; }
 
+  const context = document.getElementById('route-context')?.value || 'default';
   const payload = {
     name, pattern_type: patternType, pattern_value: patternValue,
     gateway_name: gatewayName, caller_id_override: callerId,
-    toll_allow: tollAllow, priority, enabled,
+    toll_allow: tollAllow, priority, enabled, context,
   };
 
   if (msg) { msg.textContent = '儲存中...'; msg.style.opacity = '1'; msg.style.color = 'var(--yellow)'; }
@@ -907,6 +1051,7 @@ function _currentSysExtFiltered() {
 
 let _dcTemplates   = null;   // /api/dialplan/custom/templates 快取
 let _dcFiles       = [];     // /api/dialplan/custom/files 快取
+let _dcContextsCache = [];   // /api/dialplan/contexts 快取
 let _dcMode        = 'list'; // 'list' | 'pick' | 'form'
 let _dcTemplateId  = null;   // 目前表單使用的範本 id
 let _dcEditingPath = null;   // 編輯現有檔案時的路徑；新增時為 null
@@ -919,14 +1064,16 @@ async function renderDialplanCustom(mountId = 'mainContent') {
   document.getElementById(_dcMountId).innerHTML =
     '<div style="padding:40px;text-align:center;color:var(--muted)">載入中...</div>';
 
-  const [tplData, fileData] = await Promise.all([
+  const [tplData, fileData, ctxData] = await Promise.all([
     apiFetch('/api/dialplan/custom/templates'),
     apiFetch('/api/dialplan/custom/files'),
+    apiFetch('/api/dialplan/contexts'),
   ]);
 
-  _dcTemplates = (tplData && tplData.templates) ? tplData.templates : [];
-  _dcFiles     = (fileData && fileData.files) ? fileData.files : [];
-  _dcMode      = 'list';
+  _dcTemplates     = (tplData && tplData.templates) ? tplData.templates : [];
+  _dcFiles         = (fileData && fileData.files) ? fileData.files : [];
+  _dcContextsCache = (ctxData && ctxData.contexts) ? ctxData.contexts : ['default', 'public'];
+  _dcMode          = 'list';
 
   _dcRenderRoot();
 }
@@ -1094,9 +1241,8 @@ function _dcFormPanelHtml() {
         </div>
         <div>
           <label style="font-size:12px;color:var(--label);display:block;margin-bottom:4px">Context</label>
-          <select id="dc-context" class="settings-select" style="width:100%;box-sizing:border-box">
-            <option value="default">default（分機撥出）</option>
-            <option value="public">public（外線來電）</option>
+          <select id="dc-context" class="settings-select" style="width:100%;box-sizing:border-box" onchange="_dcHandleContextChange(this)">
+            ${_dcContextOptionsHtml('default')}
           </select>
         </div>
       </div>` : `
@@ -1146,6 +1292,71 @@ function _dcCollectValues() {
     values[f.key] = el ? el.value.trim() : '';
   });
   return values;
+}
+
+// ── Context 選單：動態清單 + 就地建立新 context ───────────────────────────────
+function _dcContextOptionsHtml(selected) {
+  const list = _dcContextsCache.length ? _dcContextsCache : ['default', 'public'];
+  const opts = list.map(c =>
+    `<option value="${_escAttr(c)}" ${c === selected ? 'selected' : ''}>${_escHtml(c)}</option>`).join('');
+  return opts + `<option value="__new__">+ 建立新 context...</option>`;
+}
+
+function _dcHandleContextChange(selectEl) {
+  if (selectEl.value !== '__new__') return;
+  _dcPromptNewContext(selectEl);
+}
+
+function _dcPromptNewContext(selectEl) {
+  const fallback = _dcContextsCache[0] || 'default';
+  document.body.insertAdjacentHTML('beforeend', _dpModalHtml('📁 建立新 Context', `
+    <div style="margin-bottom:10px">
+      <label style="font-size:12px;color:var(--label);display:block;margin-bottom:4px">
+        Context 名稱 <span style="font-size:11px;color:var(--muted)">（英數字、底線、連字號）</span>
+      </label>
+      <input id="dc-new-context-name" class="settings-input" style="width:100%;box-sizing:border-box" placeholder="例：branch2">
+    </div>
+    <div style="padding:8px 10px;background:#fff3e0;border:1px solid #ffcc80;border-radius:4px;font-size:11px;color:#e65100;margin-bottom:10px">
+      ⚠️ 建立後只是新增一個空的 dialplan 資料夾，還需要另外到 SIP Profile 或其他 dialplan 設定中，
+      讓某個來源實際指向這個 context 名稱，通話才會真正進入此 context。
+    </div>
+    <div id="dc-new-context-msg" style="font-size:12px;min-height:18px;margin-bottom:8px"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="_dcCreateNewContext('${selectEl.id}', '${fallback}')"
+        style="background:var(--accent);color:#fff;font-weight:600;padding:6px 20px">建立</button>
+      <button class="btn" onclick="dpCloseModal(); document.getElementById('${selectEl.id}').value='${fallback}'">取消</button>
+    </div>
+  `));
+}
+
+async function _dcCreateNewContext(selectId, fallbackValue) {
+  const nameInput = document.getElementById('dc-new-context-name');
+  const msg       = document.getElementById('dc-new-context-msg');
+  const name = (nameInput?.value || '').trim();
+  if (!name) { if (msg) { msg.textContent = '❌ 請輸入 context 名稱'; msg.style.color = 'var(--red)'; } return; }
+  if (!/^[\w\-]+$/.test(name)) {
+    if (msg) { msg.textContent = '❌ 僅能包含英數字、底線、連字號'; msg.style.color = 'var(--red)'; }
+    return;
+  }
+  if (msg) { msg.textContent = '建立中...'; msg.style.color = 'var(--yellow)'; }
+  try {
+    const res  = await fetch(`${API_BASE}/api/dialplan/contexts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ context: name }),
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      if (!_dcContextsCache.includes(name)) _dcContextsCache.push(name);
+      dpCloseModal();
+      const sel = document.getElementById(selectId);
+      if (sel) { sel.innerHTML = _dcContextOptionsHtml(name); sel.value = name; }
+    } else {
+      if (msg) { msg.textContent = `❌ ${data.detail || '建立失敗'}`; msg.style.color = 'var(--red)'; }
+    }
+  } catch (e) {
+    if (msg) { msg.textContent = `❌ ${e.message}`; msg.style.color = 'var(--red)'; }
+  }
 }
 
 function dcTogglePreview() {
@@ -1277,9 +1488,8 @@ function dcOpenManualNew() {
       </div>
       <div>
         <label style="font-size:12px;color:var(--label);display:block;margin-bottom:4px">Context</label>
-        <select id="dc-manual-context" class="settings-select" style="width:100%;box-sizing:border-box">
-          <option value="default">default（分機撥出）</option>
-          <option value="public">public（外線來電）</option>
+        <select id="dc-manual-context" class="settings-select" style="width:100%;box-sizing:border-box" onchange="_dcHandleContextChange(this)">
+          ${_dcContextOptionsHtml('default')}
         </select>
       </div>
     </div>
