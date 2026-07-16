@@ -42,10 +42,12 @@ FreeSwitch ESL 事件 → esl_client.py 解析 CHANNEL_*/REGISTER
 | 語音信箱啟用 | `voicemail_enabled`，關閉後無人接聽會播問候語但跳過錄音 | 開啟 |
 | 通話群組 | `callgroup`（Pickup Group 用） | `default` |
 | 撥出權限 | `toll_allow`：全部/國內+本地/僅本地/無限制 | 全部 |
-| Context | SIP context | `default` |
+| Context | 下拉選單，動態讀取 `/api/dialplan/contexts`（與路由規則/自定義 Dialplan 共用快取），只能選現有 context，不提供就地建立 | `default` |
 | 自動錄音 | `recording_enabled`，詳見 `feature-recordings.md` | 關閉 |
 
 號碼欄位綁定 `oninput`/`onblur` 呼叫 `numCheckConflict()`（見 `feature-numbers.md`），編輯模式自動排除自身。
+
+Context 欄位改為下拉選單（2026-07-16），資料來源與 Dialplan 路由規則、自定義 Dialplan 頁面共用同一份 30 秒快取（`common.js: loadDialplanContexts()`），建立新 context 的入口仍只開放在「自定義 Dialplan」頁面（見 `feature-dialplan-custom.md`），分機表單只能選、不能建。編輯模式若目前值不在清單中（例如該 context 資料夾已被移除），仍保留原值供選擇並標示警語，避免非預期變更。詳見 `changelog-details/20260716-extension-context-dropdown-feature.md`。
 
 ## 儲存與 XML
 

@@ -42,6 +42,8 @@ Dialplan 路由設定頁面
 
 `list_contexts()`/`create_context_dir()`（2026-07-16 新增）也放在 `dialplan_routes.py`，透過 `GET`/`POST /api/dialplan/contexts` 供類型一（路由規則）與類型三（自定義）共用；一個 context 對應 `/etc/freeswitch/dialplan/` 底下一個子資料夾，建立入口只開放在類型三（自定義）頁面，類型一只能選既有清單，詳見 [`20260716-dialplan-context-switch-feature.md`](../changelog-details/20260716-dialplan-context-switch-feature.md)。
 
+前端這份 context 清單的共用範圍後續（同日）擴大到分機管理頁面：`static/js/common.js` 新增 `loadDialplanContexts()`（30 秒快取）供路由規則、自定義 Dialplan、分機管理三處共用，取代原本各頁各自獨立打 API 的作法；建立新 context 成功後會呼叫 `clearDialplanContextsCache()` 讓其他頁面下次載入抓到最新清單。詳見 [`20260716-extension-context-dropdown-feature.md`](../changelog-details/20260716-extension-context-dropdown-feature.md)。
+
 ## 尚未實作的通用功能
 
 | 功能 | 優先度 | 說明 |

@@ -4,6 +4,7 @@
 
 ## 2026-07
 
+- 07-16 feat: 分機管理 Context 欄位改為下拉選單，重用既有 context 清單並抽出共用快取函式 → [詳情](changelog-details/20260716-extension-context-dropdown-feature.md)
 - 07-16 fix: 登錄記錄（reg_log）去重，分機定期自動刷新註冊不再視為新登入重複寫入 → [詳情](changelog-details/20260716-reg-log-dedup-feature.md)
 - 07-16 test: 導覽列權限隱藏全面驗證完成（19 模組 × 5 內建群組，靜態比對 + 5 帳號實機測試皆通過），副產物發現 `calls`/`acl` 模組缺少前端頁面 → [詳情](changelog-details/20260716-nav-permission-audit.md)
 - 07-16 feat: Dialplan Context 切換 UI（context 篩選/全部總覽下鑽 + 自定義 Dialplan 建立新 context，衝突檢查依 context 分組） → [詳情](changelog-details/20260716-dialplan-context-switch-feature.md)
