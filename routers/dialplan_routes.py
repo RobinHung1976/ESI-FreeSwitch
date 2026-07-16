@@ -257,6 +257,13 @@ def find_conflicts(pattern_type: str, pattern_value: str,
 
         hit = any(exist_re.match(s) for s in new_samples) or \
               any(new_re.match(s) for s in exist_samples)
+        # 特例：雙方都是 custom_regex 時，兩邊樣本都是空陣列，上面的取樣比對永遠測不出重疊
+        # （custom_regex 無法窮舉樣本）。至少攔截「規則字串完全相同」這種最常見的重複情形；
+        # 語意相同但字串不同的 regex（例如 ^6\d{3}$ 與 ^(6\d{3})$）仍無法偵測，
+        # 屬取樣比對法的已知限制，需搭配路由測試工具人工確認。
+        if not hit and pattern_type == "custom_regex" and route.get("pattern_type") == "custom_regex":
+            if pattern_value.strip() == (route.get("pattern_value") or "").strip():
+                hit = True
         if not hit:
             continue
 
@@ -669,7 +676,9 @@ def check_conflict(
         "has_conflict": len(result["same_context"]) > 0,
         "conflicts": result["same_context"],
         "other_context_matches": result["other_context"],
-        "note": "自訂正規式採取樣比對，無法窮舉所有號碼，建議搭配下方路由測試工具手動驗證。" if pattern_type == "custom_regex" else None,
+        "note": "自訂正規式採取樣比對，僅能偵測規則字串完全相同的重複；若是語意相同但寫法不同的正規式"
+                "（例如 ^6\\d{3}$ 與 ^(6\\d{3})$）無法自動偵測，請務必搭配下方路由測試工具手動驗證。"
+                if pattern_type == "custom_regex" else None,
     }
 
 
