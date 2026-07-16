@@ -167,7 +167,7 @@ async function renderExtensions() {
         </div>
         <div class="settings-row">
           <span class="settings-label">Context</span>
-          <input class="settings-input" id="ext-context" value="default" />
+          <select class="settings-select" id="ext-context"></select>
         </div>
         <div class="settings-row">
           <span class="settings-label">錄音</span>
@@ -196,6 +196,23 @@ async function renderExtensions() {
   if (needsSnapshot) loadExtStatusSnapshot();
 }
 
+// ── Context 下拉選單（2026-07-16，取代原本手動輸入的文字框）──────────────────
+// 資料來源與路由規則/自定義 Dialplan 共用同一份快取（common.js: loadDialplanContexts()）。
+// 只能選現有 context，不提供就地建立——呼應 Context 切換 UI 當初的設計：
+// 建立新 context 資料夾的入口只開放在「自定義 Dialplan」頁面。
+// 編輯模式若目前值不在清單中（例如該 context 資料夾已被移除），仍保留原值供選擇，
+// 避免使用者一開表單就被迫改成別的 context，造成非預期變更。
+function _extContextOptionsHtml(contexts, selected) {
+  const list = (contexts && contexts.length) ? contexts : ['default'];
+  let opts = list.map(c =>
+    `<option value="${escAttr(c)}" ${c === selected ? 'selected' : ''}>${escHtml(c)}</option>`
+  ).join('');
+  if (selected && !list.includes(selected)) {
+    opts += `<option value="${escAttr(selected)}" selected>⚠️ ${escHtml(selected)}（資料夾可能已不存在）</option>`;
+  }
+  return opts;
+}
+
 // ── 分機 CRUD 函式 ────────────────────────────────────────────────────────────
 let _editingExtId = null;
 
@@ -206,6 +223,9 @@ async function openExtEditor(id) {
 
   const title = document.getElementById('ext-editor-title');
   const idInput = document.getElementById('ext-id');
+
+  // Context 下拉選單資料來源與 Dialplan 頁面共用同一份快取（common.js）
+  const contexts = await loadDialplanContexts();
 
   if (id) {
     // 編輯模式：載入現有資料
@@ -223,12 +243,12 @@ async function openExtEditor(id) {
 
     const data = await apiFetch('/api/extensions/list');
     const ext  = (data && data.extensions) ? data.extensions.find(e => e.id === id) : null;
+    document.getElementById('ext-context').innerHTML = _extContextOptionsHtml(contexts, (ext && ext.context) || 'default');
     if (ext) {
       document.getElementById('ext-name').value       = ext.caller_id_name || '';
       document.getElementById('ext-password').value   = ext.password === '$${default_password}' ? '' : ext.password;
       document.getElementById('ext-vm-password').value= ext.vm_password || '';
       document.getElementById('ext-callgroup').value  = ext.callgroup || '';
-      document.getElementById('ext-context').value    = ext.context || 'default';
       const tollSel = document.getElementById('ext-toll');
       if (tollSel) tollSel.value = ext.toll_allow || 'domestic,international,local';
       const recEl = document.getElementById('ext-recording');
@@ -253,7 +273,7 @@ async function openExtEditor(id) {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
-    document.getElementById('ext-context').value = 'default';
+    document.getElementById('ext-context').innerHTML = _extContextOptionsHtml(contexts, 'default');
 	const vmEnEl = document.getElementById('ext-vm-enabled');
 	if (vmEnEl) vmEnEl.checked = true;
 	const recEl = document.getElementById('ext-recording');

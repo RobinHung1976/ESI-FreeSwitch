@@ -68,15 +68,15 @@ async function renderDialplanRoutes(mountId = 'mainContent') {
   document.getElementById(mountId).innerHTML =
     '<div style="padding:40px;text-align:center;color:var(--muted)">載入中...</div>';
 
-  const [routeData, gwData, ctxData] = await Promise.all([
+  const [routeData, gwData, contexts] = await Promise.all([
     apiFetch('/api/dialplan/routes'),
     apiFetch('/api/gateway/list'),
-    apiFetch('/api/dialplan/contexts'),
+    loadDialplanContexts(),
   ]);
 
   const routes = (routeData && routeData.routes) ? routeData.routes : [];
   _routeGatewayCache   = (gwData && gwData.gateways) ? gwData.gateways : [];
-  _routeContextCache   = (ctxData && ctxData.contexts) ? ctxData.contexts : ['default'];
+  _routeContextCache   = contexts;
   _routeAllRoutesCache = routes;
   _routeCurrentFilter  = _routeDefaultFilterContext(routes);
 
@@ -1067,15 +1067,15 @@ async function renderDialplanCustom(mountId = 'mainContent') {
   document.getElementById(_dcMountId).innerHTML =
     '<div style="padding:40px;text-align:center;color:var(--muted)">載入中...</div>';
 
-  const [tplData, fileData, ctxData] = await Promise.all([
+  const [tplData, fileData, contexts] = await Promise.all([
     apiFetch('/api/dialplan/custom/templates'),
     apiFetch('/api/dialplan/custom/files'),
-    apiFetch('/api/dialplan/contexts'),
+    loadDialplanContexts(),
   ]);
 
   _dcTemplates     = (tplData && tplData.templates) ? tplData.templates : [];
   _dcFiles         = (fileData && fileData.files) ? fileData.files : [];
-  _dcContextsCache = (ctxData && ctxData.contexts) ? ctxData.contexts : ['default', 'public'];
+  _dcContextsCache = contexts;
   _dcMode          = 'list';
 
   _dcRenderRoot();
@@ -1351,6 +1351,7 @@ async function _dcCreateNewContext(selectId, fallbackValue) {
     const data = await res.json();
     if (res.ok && data.ok) {
       if (!_dcContextsCache.includes(name)) _dcContextsCache.push(name);
+      clearDialplanContextsCache();  // 讓分機管理/路由規則頁面下次載入抓到最新清單
       dpCloseModal();
       const sel = document.getElementById(selectId);
       if (sel) { sel.innerHTML = _dcContextOptionsHtml(name); sel.value = name; }

@@ -278,6 +278,40 @@ async function apiFetch(path, options = {}) {
   }
 }
 
+// ── Dialplan Context 清單（共用快取：分機管理／路由規則／自定義 Dialplan）───────
+// 2026-07-16 新增，取代原本 dialplan.js 兩處（_routeContextCache/_dcContextsCache）
+// 各自獨立打 API 的作法，三個頁面共用同一份 30 秒快取。
+let _dialplanContextsCache  = null;   // null = 尚未載入過
+let _dialplanContextsAt     = 0;
+const DIALPLAN_CONTEXTS_TTL = 30000;
+
+/** 取得目前存在的 dialplan context 清單（GET /api/dialplan/contexts）。
+ *  force=true 用於建立新 context 後強制重新打 API。
+ */
+async function loadDialplanContexts(force = false) {
+  const fresh = _dialplanContextsCache && (Date.now() - _dialplanContextsAt) < DIALPLAN_CONTEXTS_TTL;
+  if (fresh && !force) return _dialplanContextsCache;
+  const data = await apiFetch('/api/dialplan/contexts');
+  _dialplanContextsCache = (data && data.contexts && data.contexts.length) ? data.contexts : ['default'];
+  _dialplanContextsAt = Date.now();
+  return _dialplanContextsCache;
+}
+
+/** 清除共用快取（例如剛建立新 context 後），確保其他頁面下次載入抓到最新清單 */
+function clearDialplanContextsCache() {
+  _dialplanContextsCache = null;
+}
+
+// ── 共用 HTML escape（原本只有 dialplan.js 私有的 _escHtml/_escAttr 有，
+//    這裡另外提供公開版本供其他頁面共用，不動 dialplan.js 既有的私有版本）─────
+function escHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function escAttr(s) {
+  return escHtml(s).replace(/'/g, '&#39;');
+}
+
 async function fetchLiveCalls() {
   const data = await apiFetch('/api/calls');
   return (data && data.rows) ? data.rows : [];
