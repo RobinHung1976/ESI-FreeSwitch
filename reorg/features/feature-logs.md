@@ -9,7 +9,7 @@
 |---|---|
 | 📡 即時日誌 | SSE 串流 `tail -n 500 -f freeswitch.log`，分頁瀏覽（緩衝 5000 筆，每頁 100/200/500/1000 行），等級過濾：ALL/ERR/WARN/NOTICE/INFO/DEBUG/📞通話/🔐登錄 |
 | 📅 歷史日誌 | 日期下拉、等級篩選、關鍵字搜尋（後端）、分頁、下載 |
-| 🔐 登錄記錄 | ESL `REGISTER`/`UNREGISTER` 事件捕捉，最多 200 筆（記憶體保存，服務重啟歸零） |
+| 🔐 登錄記錄 | ESL `REGISTER`/`UNREGISTER` 事件捕捉，SQLite 持久化（服務重啟不歸零），自動過濾分機定期刷新註冊造成的重複記錄，僅記錄首次登入/重新登入/換 IP 或協定 |
 | 🗂 日誌管理 | 歷史日誌檔案列表、🔄 立即輪轉 |
 
 ## 每日自動排程（00:00:30）
@@ -32,4 +32,4 @@
 
 ## 已知限制
 
-登錄記錄（`reg_log`）目前僅存在記憶體，服務重啟後歸零，尚未持久化（見 `PROJECT-OVERVIEW.md` 已知待處理事項）。
+（無：登錄記錄已於 2026-07-15 完成 SQLite 持久化、2026-07-16 完成去重，見 `changelog-details/20260715-reg-log-persistence.md`、`changelog-details/20260716-reg-log-dedup-feature.md`）

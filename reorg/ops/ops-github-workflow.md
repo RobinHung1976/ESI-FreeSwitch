@@ -133,6 +133,8 @@ fi
 
 `update1.sh`：基於已知過時的版本寫成，**從未執行、已正式作廢**。實際第一支執行過的腳本是 `update2.sh`（孤兒檔案清理 + `calls.router` 重複掛載修正）。
 
+⚠️ **2026-07-16 教訓**：撰寫「登錄記錄去重」修復時，誤將編號判斷為 `update23.sh`，但該編號當時已被另一支無關腳本（Dialplan Context 切換 UI 文件收尾）使用，`update24.sh` 也已存在。原因是只依賴 changelog-details 的既有記錄推斷「下一個可用編號」，而 changelog 文件記錄本身有滯後性（最後 1～2 支腳本常來不及補文件）。後續改用 `update25.sh` 銜接，未造成 commit 遺失。**往後產生新腳本前，一律先請使用者在 server 上實際執行** `ls updateN/*.sh update*.sh 2>/dev/null` **確認真正的最大編號，不再只憑文件記錄推斷**。
+
 ## 三、`deploy.sh` 使用方式
 
 見 `ops-deployment.md` 的「基於 Git 的部署」段落。核心是：部署前檢查工作目錄乾淨、備份 `settings.json`、`git reset --hard`、還原 `settings.json`、健康檢查、印出回滾指令。
