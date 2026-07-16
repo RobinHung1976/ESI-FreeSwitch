@@ -18,6 +18,10 @@
 
 已實作範本：時段路由（time_route）、黑名單（blacklist）。
 
+## Context 選單（2026-07-16）
+
+範本模式（`dc-context`）與手動模式（`dc-manual-context`）的 Context 選單改為動態讀取 `/api/dialplan/contexts`，並加入「+ 建立新 context...」選項——選取後彈出命名輸入框，呼叫 `POST /api/dialplan/contexts` 建立空資料夾並顯示警語（純 mkdir，仍需另外到 SIP Profile 或其他 dialplan 設定讓某個來源指向這個 context 才會生效），成功後自動選取新建立的 context。這是全站唯一能建立新 context 的入口，詳見 [`20260716-dialplan-context-switch-feature.md`](../changelog-details/20260716-dialplan-context-switch-feature.md)。
+
 ## 前端三種畫面模式（`_dcMode`）
 
 - `list`：檔案列表，標示來源（🧩 範本名稱 / ✎ 手動），可編輯/刪除
@@ -43,6 +47,8 @@
 | `POST` | `/api/dialplan/custom` | 範本模式新增 |
 | `PUT` | `/api/dialplan/custom/{id}` | 範本模式更新 |
 | `POST` | `/api/dialplan/custom/preview` | 表單即時預覽 XML |
+| `GET` | `/api/dialplan/contexts` | 取得目前存在的 context 清單（與類型一共用） |
+| `POST` | `/api/dialplan/contexts` | 建立新 context 資料夾（純 mkdir；只有本頁面開放此功能，類型一路由規則頁面只能選不能建） |
 
 手動模式沿用既有的 `/api/dialplan/file`（`routers/dialplan_files.py`）。
 

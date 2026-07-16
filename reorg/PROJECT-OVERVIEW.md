@@ -108,16 +108,18 @@ cd /opt/fs-dashboard
 ### Reference
  
 - `reference/FreeSWITCH_Official_Documentation_Quick_Index.md`(原檔搬移,內容不變,未重新產出)
-## 五、已知待處理事項(截至 2026-07-13)
+## 五、已知待處理事項(截至 2026-07-16)
  
 1. **全新環境部署需手動觸發帳號建立**:`server.py` 只呼叫 `auth_db.init_db()` 建表,不會自動 seed,需手動呼叫一次 `POST /api/auth/bootstrap`。詳見 `feature-permissions-auth.md`。
 2. ~~**登錄記錄(`reg_log`)尚未持久化**:目前仍在記憶體,服務重啟後歸零。~~ → 已於 2026-07-15 完成，見 `changelog-details/20260715-reg-log-persistence.md`。
-3. **Dialplan Context 切換 UI**:後端 `RouteRule` 已有 `context` 欄位,前端加選單即可。
+3. ~~**Dialplan Context 切換 UI**:後端 `RouteRule` 已有 `context` 欄位,前端加選單即可。~~ → 已於 2026-07-16 完成，見 `changelog-details/20260716-dialplan-context-switch-feature.md`。
 4. ~~**Nginx reverse proxy + HTTPS**：尚未導入。~~ → 已於 2026-07-15 完成，見 `changelog-details/20260715-nginx-https-feature.md`。
 5. USER_NOT_REGISTERED 警告:每通電話出現的無害 NOTICE,`mod_sofia` 內部查詢順序造成,不影響通話品質,可忽略。
 6. **`owned_ext` 無法透過編輯使用者清空**:`auth_db.update_user()` 的 `owned_ext=None` 語意是「不變更」而非「清空」,目前只能改資料庫層,或未來補一支專門的清空端點。詳見 `feature-permissions-auth.md` 第五節。
 7. **導覽列權限隱藏尚未全面驗證**:2026-07-13 新增的 `applyAuthUI()` 是全站性邏輯,但只針對「使用者管理」測試過,其餘既有 18 個頁面的模組名稱對應建議找時間補測。
-## 六、下一步開發(優先順序,截至 2026-07-13)
+8. **custom_regex 語意相同但寫法不同無法自動偵測衝突**:衝突檢查採取樣比對法，只能攔截規則字串完全相同的重複，`^6\d{3}$` 與 `^(6\d{3})$` 這類語意相同但寫法不同的正規式仍測不出來，需搭配路由測試工具人工確認。詳見 `changelog-details/20260716-custom-regex-conflict-detection-fix.md`。
+9. **全站 Authorization header 缺漏修復（`update20.sh`/`update21.sh`）僅涵蓋當時排查到的 10 支檔案**:之後新增前端檔案時，寫入操作應優先使用 `apiFetch()`，避免重蹈覆轍。詳見 `changelog-details/20260716-auth-header-missing-fix.md`。
+## 六、下一步開發(優先順序,截至 2026-07-16)
  
 **高優先**
 - [x] 登入驗證 + 權限管控(已完成)
@@ -125,7 +127,7 @@ cd /opt/fs-dashboard
 - [x] Nginx reverse proxy + HTTPS（已完成，2026-07-15，見 `changelog-details/20260715-nginx-https-feature.md`）
 **中優先**
 - [x] 登錄記錄(`reg_log`)持久化（已完成，2026-07-15，見 `changelog-details/20260715-reg-log-persistence.md`）
-- [ ] Dialplan Context 切換 UI
+- [x] Dialplan Context 切換 UI（已完成，2026-07-16，見 `changelog-details/20260716-dialplan-context-switch-feature.md`）
 - [ ] 導覽列權限隱藏全面驗證(見已知待處理事項第 7 點)
 **低優先**
 - [ ] 多租戶支援

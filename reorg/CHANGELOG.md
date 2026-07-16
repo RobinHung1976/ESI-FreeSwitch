@@ -4,6 +4,9 @@
 
 ## 2026-07
 
+- 07-16 feat: Dialplan Context 切換 UI（context 篩選/全部總覽下鑽 + 自定義 Dialplan 建立新 context，衝突檢查依 context 分組） → [詳情](changelog-details/20260716-dialplan-context-switch-feature.md)
+- 07-16 fix: custom_regex 對 custom_regex 衝突檢查因取樣比對法限制永遠偵測不到重疊，補上規則字串完全相同時強制判定衝突 → [詳情](changelog-details/20260716-custom-regex-conflict-detection-fix.md)
+- 07-16 fix: 全站 10 支前端檔案共約 39 處寫入操作缺少 Authorization header，導致新增/編輯/刪除一律 401（既有 bug，非本次功能造成） → [詳情](changelog-details/20260716-auth-header-missing-fix.md)
 - 07-15 feat: 登錄記錄（reg_log）SQLite 持久化，取代原本服務重啟即歸零的記憶體 list，新增保留天數設定與每日自動清理 → [詳情](changelog-details/20260715-reg-log-persistence.md)
 - 07-15 fix: reorg/ 文件目錄（PROJECT-OVERVIEW.md/CHANGELOG.md/changelog-details/archive/features/ops/reference）稽核發現從未被 git 追蹤，全數補進版控 → [詳情](changelog-details/20260715-reorg-git-tracking-fix.md)
 

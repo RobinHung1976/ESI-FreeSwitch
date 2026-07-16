@@ -40,11 +40,12 @@ Dialplan 路由設定頁面
 
 `build_regex()`/`find_conflicts()` 這類「路由規則」特有的號碼樣式比對邏輯，刻意留在 `dialplan_routes.py`，不搬進共用模組——類型三的範本語意不同，硬共用會綁死擴充彈性。
 
+`list_contexts()`/`create_context_dir()`（2026-07-16 新增）也放在 `dialplan_routes.py`，透過 `GET`/`POST /api/dialplan/contexts` 供類型一（路由規則）與類型三（自定義）共用；一個 context 對應 `/etc/freeswitch/dialplan/` 底下一個子資料夾，建立入口只開放在類型三（自定義）頁面，類型一只能選既有清單，詳見 [`20260716-dialplan-context-switch-feature.md`](../changelog-details/20260716-dialplan-context-switch-feature.md)。
+
 ## 尚未實作的通用功能
 
 | 功能 | 優先度 | 說明 |
 |---|---|---|
-| Context 切換 UI | 中 | 後端 `RouteRule` 已有 `context` 欄位，前端加選單即可 |
 | 編輯二次確認 | 低 | 儲存前彈窗確認 |
 | 備份歷史列表與一鍵還原 | 低 | 列出所有 `.bak.*`，提供還原按鈕 |
 
@@ -56,6 +57,6 @@ Dialplan 路由設定頁面
 | 系統內建 Extension 唯讀列表 + 說明 | 類型二 | ✅ |
 | 範本選擇 → 填空式 XML 編輯器（時段路由、黑名單範本） | 類型三 | ✅ |
 | XML 語法驗證（共用） | 通用 | ✅ |
-| Context 切換 UI | 通用 | 🔲 |
+| Context 切換 UI（context 篩選/全部總覽下鑽/建立新 context） | 通用 | ✅（2026-07-16，見 [`20260716-dialplan-context-switch-feature.md`](../changelog-details/20260716-dialplan-context-switch-feature.md)） |
 | 備份歷史列表與一鍵還原 | 通用 | 🔲 |
 | 既有 raw editor（`server.py`/`dialplan_files.py`）遷移至 `dialplan_custom.py` 並改用 `reload_and_verify` | 類型三 | 🔲（可選，目前獨立實作，reload 失敗不會自動 rollback） |

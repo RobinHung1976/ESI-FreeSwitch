@@ -26,9 +26,13 @@
 | 讀取限制 | legacy 規則禁止直接 `PUT`/`DELETE`/`toggle`，只能走升級流程（400） |
 | 仍參與檢查 | legacy 規則會參與衝突檢查與路由測試（`test-number`），不會被忽略 |
 
+## Context 支援（2026-07-16）
+
+規則實際寫入的資料夾由 `context` 欄位決定（`/etc/freeswitch/dialplan/<context>/`），列表/衝突檢查/legacy 掃描皆跨所有 context 資料夾進行。前端列表可依 context 篩選（單一 context 平面表格；選「全部 context」切換成卡片總覽 + 點擊下鑽 + 麵包屑返回）。表單只能從既有 context 清單選擇，建立新 context 資料夾的入口在「自定義 Dialplan」頁面（見 [`feature-dialplan-custom.md`](feature-dialplan-custom.md)）。編輯規則時若變更 context，檔案會從舊資料夾搬到新資料夾（先寫新檔驗證成功才刪舊檔）。
+
 ## 號碼樣式衝突檢查
 
-新增/編輯時雙向取樣比對（`generate_sample_numbers()` 產生代表性樣本互相測試對方正規式），重疊回傳 409 並列出衝突清單（名稱/優先序/啟用狀態）。表單 400ms debounce 自動觸發（`onRoutePatternInput()`），編輯模式排除自身（`self_id`）。
+新增/編輯時雙向取樣比對（`generate_sample_numbers()` 產生代表性樣本互相測試對方正規式），**只有同一 context 內的重疊才視為真衝突**（回傳 409 並列出衝突清單：名稱/優先序/啟用狀態），跨 context 的重疊只回傳為參考資訊（`other_context_matches`），不阻擋儲存。`custom_regex` 對 `custom_regex` 額外攔截「規則字串完全相同」的重複（2026-07-16 修復，見 [`20260716-custom-regex-conflict-detection-fix.md`](../changelog-details/20260716-custom-regex-conflict-detection-fix.md)），語意相同但寫法不同的 regex 仍無法自動偵測。表單 400ms debounce 自動觸發（`onRoutePatternInput()`），編輯模式排除自身（`self_id`）。
 
 ## 路由測試工具
 
@@ -56,6 +60,7 @@
 | `POST` | `/api/dialplan/routes/check-conflict` | 衝突檢查（不寫檔） |
 | `POST` | `/api/dialplan/routes/test-number` | 路由測試 |
 | `POST` | `/api/dialplan/routes/legacy/upgrade` | 升級舊有手寫檔案 |
+| `GET` | `/api/dialplan/contexts` | 取得目前存在的 context 清單（與類型三共用） |
 
 ## 進階功能
 
