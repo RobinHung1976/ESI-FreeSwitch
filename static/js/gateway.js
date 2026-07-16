@@ -253,7 +253,7 @@ async function saveGw() {
   try {
     const res  = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify(payload),
     });
     const data = await res.json();
@@ -271,7 +271,10 @@ async function saveGw() {
 async function deleteGw(name) {
   if (!confirm(`確定要刪除 Gateway「${name}」？\n（原檔案會備份保留）`)) return;
   try {
-    const res  = await fetch(`${API_BASE}/api/gateway/${name}`, { method: 'DELETE' });
+    const res  = await fetch(`${API_BASE}/api/gateway/${name}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
+    });
     const data = await res.json();
     if (data.ok) {
       switchPage('gateway');

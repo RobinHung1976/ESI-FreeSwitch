@@ -579,7 +579,7 @@ async function _checkRouteConflict() {
   try {
     const res = await fetch(`${API_BASE}/api/dialplan/routes/check-conflict`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({
         pattern_type: patternType,
         pattern_value: patternValue,
@@ -757,7 +757,7 @@ async function saveRoute() {
   try {
     const res  = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body,
     });
     const data = await res.json();
@@ -782,7 +782,10 @@ async function saveRoute() {
 async function deleteRoute(id, name) {
   if (!confirm(`確定要刪除路由規則「${name}」？\n（原檔案會備份保留，不影響其他規則）`)) return;
   try {
-    const res  = await fetch(`${API_BASE}/api/dialplan/routes/${id}`, { method: 'DELETE' });
+    const res  = await fetch(`${API_BASE}/api/dialplan/routes/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
+    });
     const data = await res.json();
     if (res.ok && data.ok) {
       switchPage('dialplan_routes');
@@ -799,7 +802,7 @@ async function toggleRouteEnabled(id, newEnabled) {
   try {
     const res  = await fetch(`${API_BASE}/api/dialplan/routes/${id}/toggle`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({ enabled: newEnabled }),
     });
     const data = await res.json();
@@ -825,7 +828,7 @@ async function testRouteNumber() {
   try {
     const res  = await fetch(`${API_BASE}/api/dialplan/routes/test-number`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({ number: num }),
     });
     const data = await res.json();
@@ -1342,7 +1345,7 @@ async function _dcCreateNewContext(selectId, fallbackValue) {
   try {
     const res  = await fetch(`${API_BASE}/api/dialplan/contexts`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({ context: name }),
     });
     const data = await res.json();
@@ -1377,7 +1380,7 @@ async function _dcUpdatePreview() {
   try {
     const res = await fetch(`${API_BASE}/api/dialplan/custom/preview`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({ template_id: _dcTemplateId, values }),
     });
     const data = await res.json();
@@ -1417,7 +1420,7 @@ async function dcSaveTemplateForm() {
 
   setMsg('儲存中...', 'var(--yellow)');
   try {
-    const res  = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body });
+    const res  = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` }, body });
     const data = await res.json();
     if (res.ok && data.ok) {
       setMsg('✓ 已儲存', 'var(--green)');
