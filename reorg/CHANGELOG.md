@@ -4,6 +4,7 @@
 
 ## 2026-07
 
+- 07-16 test: 導覽列權限隱藏全面驗證完成（19 模組 × 5 內建群組，靜態比對 + 5 帳號實機測試皆通過），副產物發現 `calls`/`acl` 模組缺少前端頁面 → [詳情](changelog-details/20260716-nav-permission-audit.md)
 - 07-16 feat: Dialplan Context 切換 UI（context 篩選/全部總覽下鑽 + 自定義 Dialplan 建立新 context，衝突檢查依 context 分組） → [詳情](changelog-details/20260716-dialplan-context-switch-feature.md)
 - 07-16 fix: custom_regex 對 custom_regex 衝突檢查因取樣比對法限制永遠偵測不到重疊，補上規則字串完全相同時強制判定衝突 → [詳情](changelog-details/20260716-custom-regex-conflict-detection-fix.md)
 - 07-16 fix: 全站 10 支前端檔案共約 39 處寫入操作缺少 Authorization header，導致新增/編輯/刪除一律 401（既有 bug，非本次功能造成） → [詳情](changelog-details/20260716-auth-header-missing-fix.md)

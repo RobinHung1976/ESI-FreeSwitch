@@ -116,9 +116,10 @@ cd /opt/fs-dashboard
 4. ~~**Nginx reverse proxy + HTTPS**：尚未導入。~~ → 已於 2026-07-15 完成，見 `changelog-details/20260715-nginx-https-feature.md`。
 5. USER_NOT_REGISTERED 警告:每通電話出現的無害 NOTICE,`mod_sofia` 內部查詢順序造成,不影響通話品質,可忽略。
 6. **`owned_ext` 無法透過編輯使用者清空**:`auth_db.update_user()` 的 `owned_ext=None` 語意是「不變更」而非「清空」,目前只能改資料庫層,或未來補一支專門的清空端點。詳見 `feature-permissions-auth.md` 第五節。
-7. **導覽列權限隱藏尚未全面驗證**:2026-07-13 新增的 `applyAuthUI()` 是全站性邏輯,但只針對「使用者管理」測試過,其餘既有 18 個頁面的模組名稱對應建議找時間補測。
+7. ~~**導覽列權限隱藏尚未全面驗證**:2026-07-13 新增的 `applyAuthUI()` 是全站性邏輯,但只針對「使用者管理」測試過,其餘既有 18 個頁面的模組名稱對應建議找時間補測。~~ → 已於 2026-07-16 完成驗證(19 模組 × 5 內建群組皆符合預期),見 `changelog-details/20260716-nav-permission-audit.md`。
 8. **custom_regex 語意相同但寫法不同無法自動偵測衝突**:衝突檢查採取樣比對法，只能攔截規則字串完全相同的重複，`^6\d{3}$` 與 `^(6\d{3})$` 這類語意相同但寫法不同的正規式仍測不出來，需搭配路由測試工具人工確認。詳見 `changelog-details/20260716-custom-regex-conflict-detection-fix.md`。
 9. **全站 Authorization header 缺漏修復（`update20.sh`/`update21.sh`）僅涵蓋當時排查到的 10 支檔案**:之後新增前端檔案時，寫入操作應優先使用 `apiFetch()`，避免重蹈覆轍。詳見 `changelog-details/20260716-auth-header-missing-fix.md`。
+10. **`calls`/`acl` 模組缺少前端頁面**:`calls` 有 render 函式但側邊欄無入口;`acl` 後端 API(`routers/acl.py`)已存在但完全沒有對應前端頁面,任何群組皆無法從 UI 操作。詳見 `changelog-details/20260716-nav-permission-audit.md`。
 ## 六、下一步開發(優先順序,截至 2026-07-16)
  
 **高優先**
@@ -128,11 +129,12 @@ cd /opt/fs-dashboard
 **中優先**
 - [x] 登錄記錄(`reg_log`)持久化（已完成，2026-07-15，見 `changelog-details/20260715-reg-log-persistence.md`）
 - [x] Dialplan Context 切換 UI（已完成，2026-07-16，見 `changelog-details/20260716-dialplan-context-switch-feature.md`）
-- [ ] 導覽列權限隱藏全面驗證(見已知待處理事項第 7 點)
+- [x] 導覽列權限隱藏全面驗證(見已知待處理事項第 7 點) → 已完成,見 `changelog-details/20260716-nav-permission-audit.md`
 **低優先**
 - [ ] 多租戶支援
 - [ ] 錄音 `.trash` 自動清理
 - [ ] Dialplan 備份歷史列表與一鍵還原
 - [ ] 分機/語音信箱問候語串接音檔庫選擇器(目前僅 IVR 已串接)
 - [ ] `owned_ext` 清空端點設計(見已知待處理事項第 6 點)
+- [ ] `calls`/`acl` 前端頁面補齊(見已知待處理事項第 10 點)
  
