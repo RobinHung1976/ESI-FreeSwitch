@@ -202,13 +202,28 @@ def broadcast_ext_status(ext_num: str):
     )
 
 
+# 2026-07-16：分機定期自動刷新 SIP 註冊（keepalive）不視為新登入，
+# 只有「首次註冊 / 先前已登出後重新登入 / IP 或協定變動」才真正寫入 reg_log。
+# 服務重啟後歸零屬預期行為（跟 state.ext_status 等其他記憶體狀態一致）。
+_last_reg_state: dict = {}
+
+
 def write_reg_log(ext: str, event: str, ip: str, proto: str, ts_ms: int):
     """Write registration event to persistent SQLite log（core/reg_log_db.py）。
     2026-07-15：取代原本的記憶體 list（服務重啟即歸零）。
+    2026-07-16：新增去重，過濾掉分機定期自動刷新註冊造成的重複記錄。
     """
     import datetime as _dt
     time_str = _dt.datetime.fromtimestamp(ts_ms / 1000).strftime('%Y-%m-%d %H:%M:%S')
     proto_up = proto.upper() if proto else "UDP"
+
+    # ── 去重：同分機、同 IP/協定的連續 REGISTER 視為單純 keepalive 刷新 ──
+    prev = _last_reg_state.get(ext)
+    if (event == "REGISTER" and prev and prev.get("event") == "REGISTER"
+            and prev.get("ip") == ip and prev.get("proto") == proto_up):
+        return
+    _last_reg_state[ext] = {"event": event, "ip": ip, "proto": proto_up}
+
     try:
         reg_log_db.insert_log(ext, event, ip, proto_up, ts_ms, time_str)
     except Exception as e:
