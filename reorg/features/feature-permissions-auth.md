@@ -1,7 +1,7 @@
 # 使用者登入與權限系統 — 實際版本記錄(取代 permission-feature-summary-20260703.md)
 
 建立日期:2026-07-10
-最後更新:2026-07-13(第六節「前端」、第十節「後續規劃」更新，反映使用者管理前端頁面已上線)
+最後更新:2026-07-17(第五節補上 `clear_owned_ext` 參數說明、第六節「已知限制」移除已解決項目、第十節「後續規劃」第 6 點結案)
 狀態:對照 `/opt/fs-dashboard` 實機快照逐一核對,本文件內容為**實際運作版本**,非設計草案
 取代文件:`permission-feature-summary-20260703.md`(該文件僅為初版設計決策,與此版本已有實質差異)
 
@@ -36,6 +36,8 @@
 
 `sip_profile`、`acl` 是 2026-07-03 的 `sip-profile-acl-feature-20260703.md` 功能加進來的,權限系統這邊同步補上對應模組。
 
+**注意(2026-07-17 補充)**:`calls` 模組雖然仍在權限矩陣中,但前端已無獨立頁面(見 `feature-sip-profile-acl.md` 及 `changelog-details/20260717-owned-ext-clear-and-acl-calls-refactor.md`)——`calls` 模組權限實際上只影響 `/api/calls`、`/api/registrations` 等後端端點的存取(`overview` 頁面呼叫這些端點時仍會走 `Module.CALLS` 權限檢查),不影響任何側邊欄項目的顯示與否。
+
 ## 四、最終權限矩陣(5 個內建群組,與初版設計文件一致,未變動)
 
 | 模組分類 | System Admin | System Viewer | Technical Support Admin | Technical Support | User |
@@ -46,6 +48,7 @@
 
 - `scope`:僅 `User` 群組為 `own`,其餘皆 `all`
 - 5 個內建群組皆 `is_builtin=True`,群組本身不可刪除/改名(建立自訂群組時可指定 scope,但同樣建立後不可再改)
+- **提醒**:`Technical Support` 群組的 `sip_profile` 是 `RCUD`（可讀寫），但 `acl` 是 `none`。這正是 2026-07-17 把 ACL 管理獨立成專屬頁面（不再掛在 SIP Profile 頁面內）的原因——避免此群組「看得到 SIP Profile 頁面，卻在裡面的 ACL 相關功能吃 403」的不一致體驗。
 
 ## 五、API 端點清單(實際檔案)
 
@@ -72,7 +75,7 @@ POST   /api/users/{id}/reset-password
 DELETE /api/users/{id}
 ```
 
-`update_user()` 的 `owned_ext` 參數語意是「`None` = 不變更」,不是「清空」——目前無法透過這支 API 把已設定的 `owned_ext` 清空,前端表單留空送出實際上會保留舊值。
+`update_user()` 的 `owned_ext` 參數語意維持「`None` = 不變更」（向下相容，未變動）。**2026-07-17 新增** `clear_owned_ext: bool = False` 參數（`UpdateUserRequest`/`auth_db.update_user()` 皆已加上）：設為 `True` 時無論 `owned_ext` 傳了什麼，一律將該使用者的 `owned_ext` 寫入 `NULL`，用於明確清空專屬分機。前端「使用者管理」頁面編輯表單新增「清空專屬分機」勾選框，勾選後會停用/清空上方輸入框並送出 `clear_owned_ext: true`，避免同時填新值又勾清空造成語意衝突。詳見 `changelog-details/20260717-owned-ext-clear-and-acl-calls-refactor.md`。
 
 ### `routers/perm_groups.py`(`/api/perm-groups` 前綴,獨立檔案,非併在 users.py)
 
@@ -99,7 +102,7 @@ DELETE /api/perm-groups/{id}
 
 單頁雙 Tab:
 
-- **使用者 Tab**:列表(帳號/權限群組/專屬分機/狀態/待改密碼標籤),可新增、編輯(權限群組/專屬分機/停用)、重設密碼、刪除
+- **使用者 Tab**:列表(帳號/權限群組/專屬分機/狀態/待改密碼標籤),可新增、編輯(權限群組/專屬分機/清空專屬分機/停用)、重設密碼、刪除
 - **權限群組 Tab**:列表(名稱/scope/內建標籤),5 個內建群組**完全唯讀**(僅「檢視矩陣」,無編輯/刪除按鈕);自訂群組可編輯 19 個模組的權限矩陣、可刪除;新增自訂群組需指定 name/description/scope + 完整矩陣,建立後 name/scope 不可再改
 
 導覽列會依登入者的 JWT 權限矩陣動態隱藏無讀取權限的項目(`applyAuthUI()`,對照 `data-page` → `core/permissions.py` 的 Module 常數,Dialplan 三個子頁共用 `dialplan` 模組)。這是全站導覽列**第一次**有權限判斷,過去所有頁面的導覽項目都是純靜態顯示、只靠後端 403 擋。
@@ -107,11 +110,10 @@ DELETE /api/perm-groups/{id}
 畫面最上方有 `.topbar`(`style.css` 原本就定義、但 07-01 模組化重整後沒接上的插槽):左側顯示目前頁面標題(`#pageTitle`,`switchPage()` 本來就有在寫,過去因為畫面沒有這個元素一直靜默失效),右側顯示「登入身分:帳號(群組名)」+ 登出按鈕。
 
 **已知限制**:
-- `owned_ext` 目前無法透過編輯使用者清空(見第五節說明)
 - ESL 系統狀態列在帳號無 `esl` 讀取權限時顯示「無存取權限」,與真正斷線的「無法取得」區分
-- 導覽列權限隱藏邏輯是全站性的,但目前只針對「使用者管理」新增這次做過完整測試,其餘既有頁面的模組名稱對應未逐一驗證過
+- 導覽列權限隱藏邏輯是全站性的,但目前只針對「使用者管理」新增這次做過完整測試,其餘既有頁面的模組名稱對應未逐一驗證過 → 已於 2026-07-16 完成全面驗證,見 `changelog-details/20260716-nav-permission-audit.md`
 
-詳細測試發現的問題與修復過程見 `changelog-details/20260713-user-management-feature.md`。
+詳細測試發現的問題與修復過程見 `changelog-details/20260713-user-management-feature.md`。`owned_ext` 清空功能的設計與驗證過程見 `changelog-details/20260717-owned-ext-clear-and-acl-calls-refactor.md`。
 
 ## 七、範例帳號(bootstrap 後建立,idempotent)
 
@@ -142,5 +144,5 @@ DELETE /api/perm-groups/{id}
 2. ~~清理孤兒檔案~~ → **已完成**(2026-07-10,`update2.sh`)
 3. ~~修正 `calls.router` 重複掛載~~ → **已完成**(2026-07-10,`update2.sh`)
 4. `FreeSwitch-Project-v3-20260702.md` 補上認證/權限系統 + SIP Profile/ACL 章節(尚未進行)
-5. (新增)導覽列權限隱藏邏輯建議找時間用不同權限組合的帳號完整測一輪,確認全部 18 個既有頁面的 `data-page` 對應模組名稱都正確
-6. (新增)`owned_ext` 清空限制——後端需要設計「明確清空」的參數語意或獨立端點,才能讓使用者管理頁面支援清空專屬分機
+5. ~~導覽列權限隱藏邏輯建議找時間用不同權限組合的帳號完整測一輪~~ → **已完成**(2026-07-16,見 `changelog-details/20260716-nav-permission-audit.md`)
+6. ~~`owned_ext` 清空限制——後端需要設計「明確清空」的參數語意或獨立端點~~ → **已完成**(2026-07-17,新增 `clear_owned_ext` 參數,見第五節與 `changelog-details/20260717-owned-ext-clear-and-acl-calls-refactor.md`)

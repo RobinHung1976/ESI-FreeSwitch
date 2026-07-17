@@ -4,6 +4,8 @@
 
 ## 2026-07
 
+- 07-17 feat: `owned_ext` 支援明確清空（新增 `clear_owned_ext` 參數，向下相容） → [詳情](changelog-details/20260717-owned-ext-clear-and-acl-calls-refactor.md)
+- 07-17 refactor: `calls`/`acl` 前端頁面重構——移除與「通話即時狀態」重複的「即時通話監控」頁面；ACL 信任清單獨立成「SIPTrunk ACL 信任清單」頁面，移除 `sip-profile.js` 內權限矩陣不一致的重複 Tab → [詳情](changelog-details/20260717-owned-ext-clear-and-acl-calls-refactor.md)
 - 07-16 feat: 分機管理 Context 欄位改為下拉選單，重用既有 context 清單並抽出共用快取函式 → [詳情](changelog-details/20260716-extension-context-dropdown-feature.md)
 - 07-16 fix: 登錄記錄（reg_log）去重，分機定期自動刷新註冊不再視為新登入重複寫入 → [詳情](changelog-details/20260716-reg-log-dedup-feature.md)
 - 07-16 test: 導覽列權限隱藏全面驗證完成（19 模組 × 5 內建群組，靜態比對 + 5 帳號實機測試皆通過），副產物發現 `calls`/`acl` 模組缺少前端頁面 → [詳情](changelog-details/20260716-nav-permission-audit.md)
