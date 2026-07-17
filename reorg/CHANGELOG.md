@@ -4,6 +4,7 @@
 
 ## 2026-07
 
+- 07-17 style: 側邊欄視覺優化（標題/項目字級對比度調整）+ updateN.sh 文件交付流程修正、記錄自動歸檔 git add -A 誤掃問題 → [詳情](changelog-details/20260717-sidebar-visual-refinement.md)
 - 07-17 feat: `owned_ext` 支援明確清空（新增 `clear_owned_ext` 參數，向下相容） → [詳情](changelog-details/20260717-owned-ext-clear-and-acl-calls-refactor.md)
 - 07-17 refactor: `calls`/`acl` 前端頁面重構——移除與「通話即時狀態」重複的「即時通話監控」頁面；ACL 信任清單獨立成「SIPTrunk ACL 信任清單」頁面，移除 `sip-profile.js` 內權限矩陣不一致的重複 Tab → [詳情](changelog-details/20260717-owned-ext-clear-and-acl-calls-refactor.md)
 - 07-16 feat: 分機管理 Context 欄位改為下拉選單，重用既有 context 清單並抽出共用快取函式 → [詳情](changelog-details/20260716-extension-context-dropdown-feature.md)
