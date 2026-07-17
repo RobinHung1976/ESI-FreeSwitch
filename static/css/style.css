@@ -959,3 +959,22 @@
   /* 多通子列：左側缺分機欄（由 rowspan 佔用），加虛線區隔 */
   .uc-subcall td:first-child { padding-left: 20px; }
   .uc-subcall { opacity: 0.92; }
+
+  /* == 20260717 sidebar visual refinement == */
+  .nav-section-label {
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .nav-group + .nav-group {
+    border-top: 1px solid rgba(2,119,189,0.12);
+    margin-top: 6px;
+    padding-top: 6px;
+  }
+  .nav-icon {
+    width: 20px;
+    display: inline-flex;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
