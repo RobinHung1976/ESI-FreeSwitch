@@ -88,6 +88,15 @@ git fetch origin   # 確認不再出現轉址提示
 9. `push` 與 `deploy.sh` 執行步驟刻意保留手動確認，不做自動化串接
 
 ### 自動歸檔固定寫法
+⚠️ **2026-07-17 已知問題（待下次產生新 updateN.sh 時一併修正）**：自動歸檔步驟固定用 `git add -A`，會把「跑腳本當下所有未 commit 的變更」一起掃進 `chore:` commit，不只是要歸檔的 updateN.sh 腳本本身。實際案例：`update36.sh` 執行時，使用者手動編輯中的 `ops-github-workflow.md`（30 行異動）被一併掃進 `chore: 歸檔已執行的 updateN.sh 腳本`（commit `1e2e2ad`），導致文件異動被誤貼上 `chore` 標籤，而非預期的 `docs:`。當下未拆分修正（已 push，force push 風險大於效益），僅記錄待下次修正。
+
+**下次修正方向**：歸檔步驟改成只 `git add` 明確路徑（`update*.sh` 與 `updateN/` 底下的搬移結果），不要用 `-A` 全掃：
+
+```bash
+git add update*.sh "$ARCHIVE_DIR"/
+```
+
+避免歸檔 commit 意外夾帶其他不相干的、當下正在編輯中的檔案異動。
 
 ⚠️ **2026-07-15 更正**：先前版本用 `update${CURRENT}`（依當次腳本編號）當資料夾名稱，執行 `update8.sh` 時因此誤建了一個新的 `update8/` 資料夾，跟本專案實際上一直沿用的「統一歸檔進固定資料夾 `updateN/`」不一致（`update2.sh`~`update7.sh` 都在同一個 `updateN/` 底下）。已改為固定資料夾名稱，並用 `$(basename "$0")` 動態取得目前腳本檔名，不用再手動設定 `CURRENT` 編號變數：
 
