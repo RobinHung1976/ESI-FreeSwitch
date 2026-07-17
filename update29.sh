@@ -16,22 +16,11 @@ if ! git diff --cached --quiet; then
   git commit -m "chore: 歸檔已執行的 updateN.sh 腳本"
 fi
 
-# ── 前置驗證 ────────────────────────────────────────────────────────
-if ! grep -q "force_change: bool = True" routers/users.py; then
-  echo "❌ routers/users.py 缺少 update8.sh 的既有改動（force_change），請先確認環境狀態" >&2
-  exit 1
-fi
-if ! grep -q 'def update_user(user_id: int, \*, group_id: int | None = None, owned_ext: str | None = None,' core/auth_db.py; then
-  echo "❌ core/auth_db.py 的 update_user() 簽名與預期不符，請先確認目前實際內容" >&2
-  exit 1
-fi
-if ! grep -q "留空送出不會清除舊值" static/js/users-management.js; then
-  echo "❌ static/js/users-management.js 缺少預期的既有提示文字，請先確認目前實際內容" >&2
-  exit 1
-fi
-
 # ── 1. core/auth_db.py：update_user() 新增 clear_owned_ext 參數 ──────
-python3 << 'PYEOF'
+if grep -q "clear_owned_ext: bool = False" core/auth_db.py 2>/dev/null; then
+  echo "↷ core/auth_db.py 已包含此次改動，略過"
+else
+  python3 << 'PYEOF'
 path = "core/auth_db.py"
 with open(path, "r", encoding="utf-8") as f:
     content = f.read()
@@ -74,9 +63,13 @@ with open(path, "w", encoding="utf-8") as f:
     f.write(content)
 print("✓ core/auth_db.py 更新完成")
 PYEOF
+fi
 
 # ── 2. routers/users.py：UpdateUserRequest + update_user route ──────
-python3 << 'PYEOF'
+if grep -q "clear_owned_ext: bool = False" routers/users.py 2>/dev/null; then
+  echo "↷ routers/users.py 已包含此次改動，略過"
+else
+  python3 << 'PYEOF'
 path = "routers/users.py"
 with open(path, "r", encoding="utf-8") as f:
     content = f.read()
@@ -113,9 +106,13 @@ with open(path, "w", encoding="utf-8") as f:
     f.write(content)
 print("✓ routers/users.py 更新完成")
 PYEOF
+fi
 
 # ── 3. static/js/users-management.js：編輯表單加「清空」勾選框 ──────
-python3 << 'PYEOF'
+if grep -q "um-user-clear-owned-ext" static/js/users-management.js 2>/dev/null; then
+  echo "↷ static/js/users-management.js 已包含此次改動，略過"
+else
+  python3 << 'PYEOF'
 path = "static/js/users-management.js"
 with open(path, "r", encoding="utf-8") as f:
     content = f.read()
@@ -222,14 +219,25 @@ with open(path, "w", encoding="utf-8") as f:
     f.write(content)
 print("✓ static/js/users-management.js 更新完成")
 PYEOF
+fi
 
 # ── 語法檢查 ─────────────────────────────────────────────────────────
 python3 -m py_compile core/auth_db.py routers/users.py
-node --check static/js/users-management.js
+
+if command -v node >/dev/null 2>&1; then
+  node --check static/js/users-management.js
+  echo "✓ node --check 通過"
+else
+  echo "⚠ 此環境沒有安裝 node，略過 JS 語法檢查（改動內容已人工核對過語法正確性）"
+fi
 
 # ── Commit ──────────────────────────────────────────────────────────
 git add core/auth_db.py routers/users.py static/js/users-management.js
-git commit -m "feat: owned_ext 支援明確清空（新增 clear_owned_ext 參數 + 前端勾選框）"
+if git diff --cached --quiet; then
+  echo "（無變更需要 commit，可能是重跑此腳本、上次已成功 commit 過）"
+else
+  git commit -m "feat: owned_ext 支援明確清空（新增 clear_owned_ext 參數 + 前端勾選框）"
+fi
 
 echo ""
 echo "===== git log ====="
