@@ -978,3 +978,14 @@
     flex-shrink: 0;
   }
 
+  /* == 20260717 sidebar contrast adjustment v2 == */
+  .nav-section-label {
+    font-size: 13px;
+    color: #012a44;
+  }
+  .nav-item {
+    font-size: 13px;
+    color: #4a6a8a;
+  }
+
+
