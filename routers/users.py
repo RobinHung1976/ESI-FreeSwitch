@@ -20,6 +20,7 @@ class UpdateUserRequest(BaseModel):
     group_id: int | None = None
     owned_ext: str | None = None
     disabled: bool | None = None
+    clear_owned_ext: bool = False
 
 
 class ResetPasswordRequest(BaseModel):
@@ -46,6 +47,7 @@ def update_user(user_id: int, body: UpdateUserRequest):
     try:
         auth_db.update_user(
             user_id, group_id=body.group_id, owned_ext=body.owned_ext, disabled=body.disabled,
+            clear_owned_ext=body.clear_owned_ext,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))

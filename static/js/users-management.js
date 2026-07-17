@@ -159,7 +159,11 @@ function _umOpenUserEditor(userId) {
         <span class="settings-label">專屬分機</span>
         <div style="flex:1;display:flex;flex-direction:column;gap:4px">
           <input class="settings-input" id="um-user-owned-ext" placeholder="例：1001（scope=own 群組必填）" value="${u && u.owned_ext ? u.owned_ext : ''}" />
-          ${u ? '<span class="settings-hint">留空送出不會清除舊值（後端目前的更新邏輯是「未提供」才略過，無法用空字串清空），如需清空請聯絡後端調整</span>' : ''}
+          ${u ? `
+          <label style="display:flex;align-items:center;gap:6px">
+            <input type="checkbox" id="um-user-clear-owned-ext" onchange="_umToggleClearOwnedExt(this)" />
+            <span class="settings-hint" style="margin:0">清空專屬分機（勾選後儲存會真正移除舊值，並忽略上方欄位內容；留空但未勾選仍不會清除舊值）</span>
+          </label>` : ''}
         </div>
       </div>
       ${u ? `
@@ -186,6 +190,13 @@ function _umOpenUserEditor(userId) {
 function _umCloseUserEditor() {
   document.getElementById('um-users-list-panel').style.display   = 'block';
   document.getElementById('um-users-editor-panel').style.display = 'none';
+}
+
+function _umToggleClearOwnedExt(checkbox) {
+  const input = document.getElementById('um-user-owned-ext');
+  if (!input) return;
+  input.disabled = checkbox.checked;
+  if (checkbox.checked) input.value = '';
 }
 
 async function _umSaveNewUser() {
@@ -222,7 +233,9 @@ async function _umSaveNewUser() {
 async function _umSaveUserEdits(userId) {
   const msg = document.getElementById('um-user-save-msg');
   const groupId  = document.getElementById('um-user-group').value;
-  const ownedExt = document.getElementById('um-user-owned-ext').value.trim();
+  const clearOwnedExtEl = document.getElementById('um-user-clear-owned-ext');
+  const clearOwnedExt = clearOwnedExtEl ? clearOwnedExtEl.checked : false;
+  const ownedExt = clearOwnedExt ? '' : document.getElementById('um-user-owned-ext').value.trim();
   const disabledEl = document.getElementById('um-user-disabled');
 
   if (!groupId) { alert('請選擇權限群組'); return; }
@@ -238,6 +251,7 @@ async function _umSaveUserEdits(userId) {
     body: JSON.stringify({
       group_id: parseInt(groupId),
       owned_ext: ownedExt || null,
+      clear_owned_ext: clearOwnedExt,
       disabled: disabledEl ? disabledEl.checked : undefined,
     }),
   });

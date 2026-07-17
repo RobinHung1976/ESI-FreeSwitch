@@ -330,13 +330,16 @@ def create_user(username: str, password: str, group_id: int, owned_ext: str | No
 
 
 def update_user(user_id: int, *, group_id: int | None = None, owned_ext: str | None = None,
-                 disabled: bool | None = None) -> None:
+                 disabled: bool | None = None, clear_owned_ext: bool = False) -> None:
     with _conn() as conn:
         row = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
         if not row:
             raise ValueError("使用者不存在")
         new_group_id = group_id if group_id is not None else row["group_id"]
-        new_owned_ext = owned_ext if owned_ext is not None else row["owned_ext"]
+        if clear_owned_ext:
+            new_owned_ext = None
+        else:
+            new_owned_ext = owned_ext if owned_ext is not None else row["owned_ext"]
         new_disabled = int(disabled) if disabled is not None else row["disabled"]
         conn.execute(
             "UPDATE users SET group_id=?, owned_ext=?, disabled=?, updated_at=? WHERE id=?",
