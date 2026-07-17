@@ -120,19 +120,35 @@ fi
 
 ### 交付方式
 
-由於下載檔案的方式有時不可行，退回**貼上存檔**方式：
+⚠️ **2026-07-17 更正**：先前記錄「下載檔案的方式有時不可行」已不成立，直接請 Claude 產生 `updateN.sh` 實體檔案交付即可，不需要退回貼上存檔。
 
-1. 在對話中整份貼出 `updateN.sh` 內容
-2. 在 server 上 `cat > updateN.sh << 'UPDATEN_EOF' ... UPDATEN_EOF` 整份存檔
-3. `wc -l updateN.sh` 核對行數，確認沒有貼漏
-4. `chmod +x updateN.sh && ./updateN.sh`
-5. **不管成功、失敗、或前置驗證中止，都把完整輸出貼回來核對**
-6. 確認腳本產生的 commit 沒問題後，`push`/`deploy.sh` 由使用者自己手動執行
+1. Claude 直接產生 `updateN.sh` 檔案並提供下載
+2. 下載後上傳/傳輸到 server（`scp`、拖拉上傳等皆可）
+3. `chmod +x updateN.sh && ./updateN.sh`
+4. **不管成功、失敗、或前置驗證中止，都把完整輸出貼回來核對**
+5. 確認腳本產生的 commit 沒問題後，`push`/`deploy.sh` 由使用者自己手動執行
+
+（貼上存檔仍可作為備援方式，僅在檔案下載/傳輸實際不可行時使用）
+
+### 純文件（.md）異動如何推上 GitHub
+
+⚠️ 純文件變更（`PROJECT-OVERVIEW.md`/`CHANGELOG.md`/`feature-*.md`/`ops-*.md` 等）**不需要**透過 `updateN.sh`：`updateN.sh` 是為了程式碼/設定檔變更設計的（需要前置驗證、rollback 安全網、驗證清單），文件本身沒有執行風險，直接手動 git 三連即可：
+
+```bash
+cd /opt/fs-dashboard
+git add <檔名>.md
+git status          # 確認只有預期的檔案被加入，避免誤帶其他未完成的變更
+git commit -m "docs: <簡述本次文件異動>"
+git push
+```
+
+commit 訊息前綴統一用 `docs:`，與 `feat:`/`fix:`/`refactor:`/`chore:`/`style:` 等其他類型區隔。
 
 ### 已知編號歷史
 
 `update1.sh`：基於已知過時的版本寫成，**從未執行、已正式作廢**。實際第一支執行過的腳本是 `update2.sh`（孤兒檔案清理 + `calls.router` 重複掛載修正）。
 
+⚠️ **2026-07-17 補充**：`update35.sh` 執行前使用者已用 `ls updateN/*.sh update*.sh | sort -V | tail -5` 實機確認過編號，證實文件記錄（34）與實際狀態一致，此次未發生編號誤判。
 ⚠️ **2026-07-16 教訓**：撰寫「登錄記錄去重」修復時，誤將編號判斷為 `update23.sh`，但該編號當時已被另一支無關腳本（Dialplan Context 切換 UI 文件收尾）使用，`update24.sh` 也已存在。原因是只依賴 changelog-details 的既有記錄推斷「下一個可用編號」，而 changelog 文件記錄本身有滯後性（最後 1～2 支腳本常來不及補文件）。後續改用 `update25.sh` 銜接，未造成 commit 遺失。**往後產生新腳本前，一律先請使用者在 server 上實際執行** `ls updateN/*.sh update*.sh 2>/dev/null` **確認真正的最大編號，不再只憑文件記錄推斷**。
 
 ## 三、`deploy.sh` 使用方式
