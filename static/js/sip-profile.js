@@ -1,8 +1,11 @@
 // sip-profile.js — SIP Profile 進階設定（比照 dialplan.js 的 Hub 版面：左側子選單 + 右側內容）
+//
+// 2026-07-17：原本的 Tab 2「信任 SBC 清單」已移除，統一改由獨立頁面
+// static/js/acl.js（側邊欄「SIPTrunk ACL 信任清單」）管理，避免同一功能有兩個入口，
+// 也避免此處掛在 sip_profile 權限下、但後端實際檢查的是 acl 權限造成的權限不一致問題。
 
 const SP_HUB_TREE = [
   { id: 'sp-params', icon: '📡', label: 'Profile 參數' },
-  { id: 'sp-acl',    icon: '🛡️', label: '信任 SBC 清單' },
   { id: 'sp-nat',    icon: '➕', label: '新增 NAT Profile' },
 ];
 
@@ -48,7 +51,6 @@ async function renderSpTabContent() {
   const el = document.getElementById('sp-hub-content');
   if (!el) return;
   if (_spTab === 'sp-params') return renderSpParamsTab(el);
-  if (_spTab === 'sp-acl')    return renderSpAclTab(el);
   if (_spTab === 'sp-nat')    return renderSpNatTab(el);
 }
 
@@ -196,188 +198,6 @@ async function saveSpParams(name) {
     }
   } catch (e) {
     if (msg) { msg.textContent = `✗ ${e.message}`; msg.style.color = 'var(--red)'; }
-  }
-}
-
-
-// ══════════════════════════════════════════════════════════════════════════
-// Tab 2：信任 SBC 清單（acl.conf.xml trusted_sbc）
-// ══════════════════════════════════════════════════════════════════════════
-
-async function renderSpAclTab(container) {
-  container.innerHTML = `<div style="padding:40px;text-align:center;color:var(--muted)">載入中...</div>`;
-
-  const data = await apiFetch('/api/acl/trusted-sbc');
-  const entries = (data && data.entries) ? data.entries : [];
-  const pendingCount = entries.filter(e => !e.active).length;
-
-  const rows = entries.length === 0
-    ? `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">尚無信任的 SBC，請於下方新增</td></tr>`
-    : entries.map(e => `
-      <tr>
-        <td style="color:var(--label);font-weight:600">${e.cidr}</td>
-        <td style="color:var(--label)">${e.note || '—'}</td>
-        <td>${e.active
-          ? '<span class="call-status status-active"><span class="dot"></span>已生效</span>'
-          : '<span class="call-status status-hold"><span class="dot"></span>待重啟</span>'}</td>
-        <td style="display:flex;gap:4px">
-          <button class="btn" style="padding:3px 8px;font-size:11px"
-            onclick="openAclEditor('${e.cidr}', '${(e.note || '').replace(/'/g, "\\'")}')">✏ 編輯</button>
-          <button class="btn danger" style="padding:3px 8px;font-size:11px"
-            onclick="deleteAclEntry('${e.cidr}')">✕ 移除</button>
-        </td>
-      </tr>`).join('');
-
-  const pendingBanner = pendingCount > 0 ? `
-    <div style="background:rgba(255,152,0,0.12);border:1px solid #ff9800;border-radius:6px;
-                padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:12px">
-      <div style="font-size:12px;color:#7a4a00;line-height:1.6">
-        ⚠️ <strong>${pendingCount} 筆變更尚未生效</strong>，需重啟 FreeSWITCH 服務才會套用到記憶體中的 ACL 判斷。
-        重啟會中斷所有進行中的通話，請安排維護時間執行。
-      </div>
-      <button class="btn primary" style="white-space:nowrap" onclick="restartFreeswitchForAcl()">🔄 立即重啟套用</button>
-    </div>` : `
-    <div style="background:rgba(76,175,80,0.10);border:1px solid var(--green);border-radius:6px;
-                padding:10px 16px;margin-bottom:14px;font-size:12px;color:var(--green)">
-      ✓ 所有信任項目皆已生效
-    </div>`;
-
-  container.innerHTML = `
-  ${pendingBanner}
-  <div class="panel" style="margin-bottom:14px">
-    <div class="panel-header">
-      <span class="panel-title">信任的內部 SBC IP / 網段</span>
-      <span class="panel-badge">${entries.length} 筆</span>
-      <div class="panel-actions">
-        <button class="btn" onclick="switchSpTab('sp-acl')">↺ 刷新</button>
-      </div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>IP / CIDR</th><th>備註</th><th>狀態</th><th>操作</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="panel">
-    <div class="panel-header"><span class="panel-title" id="acl-form-title">+ 新增信任 SBC</span></div>
-    <div style="padding:20px;display:flex;flex-direction:column;gap:14px;max-width:520px">
-      <div class="settings-row">
-        <span class="settings-label">IP / CIDR *</span>
-        <input class="settings-input" id="acl-cidr" placeholder="例：172.16.20.2 或 172.16.20.0/24">
-      </div>
-      <div class="settings-row">
-        <span class="settings-label">備註</span>
-        <input class="settings-input" id="acl-note" placeholder="例：台北辦公室 AudioCodes SBC">
-      </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn primary" id="acl-submit-btn" onclick="saveAclEntry()">💾 新增</button>
-        <span id="acl-save-msg" style="font-size:12px;opacity:0;transition:opacity 0.3s"></span>
-      </div>
-    </div>
-  </div>`;
-}
-
-// static/js/sip-profile.js — restartFreeswitchForAcl()
-async function restartFreeswitchForAcl(confirmed = false) {
-  if (!confirmed && !confirm('確定要重啟 FreeSWITCH 服務嗎？\n這會中斷所有進行中的通話，請確認已安排維護時間。')) return;
-
-  try {
-    const res  = await fetch(`${API_BASE}/api/acl/apply-restart`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
-      body: JSON.stringify({ confirm: confirmed }),
-    });
-    const data = await res.json();
-    const detailText = Array.isArray(data.detail)
-      ? data.detail.map(d => d.msg || JSON.stringify(d)).join('; ')
-      : (data.detail || '未知錯誤');
-
-    if (res.status === 409) {
-      if (confirm(detailText)) return restartFreeswitchForAcl(true);
-      return;
-    }
-    if (res.ok && data.ok) {
-      alert(`✓ 重啟指令已送出（中斷了 ${data.active_calls_dropped} 通通話），約 15-30 秒後自動重新整理狀態`);
-      setTimeout(() => switchSpTab('sp-acl'), 20000);   // 5000 → 20000
-    } else {
-      alert(`✗ 重啟失敗：${detailText}`);
-    }
-  } catch (e) {
-    alert(`✗ 重啟失敗：${e.message}`);
-  }
-}
-
-let _aclEditingCidr = null;   // null = 新增模式，非 null = 編輯模式（存原始 cidr）
-
-function openAclEditor(cidr, note) {
-  _aclEditingCidr = cidr || null;
-  document.getElementById('acl-form-title').textContent = cidr ? `編輯信任 SBC：${cidr}` : '+ 新增信任 SBC';
-  document.getElementById('acl-cidr').value = cidr || '';
-  document.getElementById('acl-note').value = note || '';
-  document.getElementById('acl-submit-btn').textContent = cidr ? '💾 儲存修改' : '💾 新增';
-}
-
-async function saveAclEntry() {
-  const msg  = document.getElementById('acl-save-msg');
-  const cidr = document.getElementById('acl-cidr').value.trim();
-  const note = document.getElementById('acl-note').value.trim();
-  if (!cidr) { alert('請輸入 IP 或 CIDR'); return; }
-
-  if (msg) { msg.textContent = '儲存中...'; msg.style.opacity = '1'; msg.style.color = 'var(--yellow)'; }
-
-  const isEdit = !!_aclEditingCidr;
-  const url    = isEdit
-    ? `${API_BASE}/api/acl/trusted-sbc/${encodeURIComponent(_aclEditingCidr)}`
-    : `${API_BASE}/api/acl/trusted-sbc`;
-
-  try {
-    const res  = await fetch(url, {
-      method: isEdit ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
-      body: JSON.stringify({ cidr, note }),
-    });
-    const data = await res.json();
-    if (res.ok && data.ok) {
-      _aclEditingCidr = null;
-      switchSpTab('sp-acl');
-    } else {
-      if (msg) { msg.textContent = `✗ ${data.detail || '儲存失敗'}`; msg.style.color = 'var(--red)'; }
-    }
-  } catch (e) {
-    if (msg) { msg.textContent = `✗ ${e.message}`; msg.style.color = 'var(--red)'; }
-  }
-}
-
-// static/js/sip-profile.js — deleteAclEntry()
-async function deleteAclEntry(cidr) {
-  if (!confirm(
-    `確定要移除信任來源「${cidr}」？\n\n` +
-    `⚠️ 移除後該來源會從清單消失，但 FreeSWITCH 記憶體中的 ACL 判斷「不會」立即改變，` +
-    `仍會被視為信任來源，直到重啟服務為止。\n如需立即撤銷信任，移除後請執行「立即重啟套用」。`
-  )) return;
-
-  try {
-    const res = await fetch(`${API_BASE}/api/acl/trusted-sbc/${encodeURIComponent(cidr)}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${getToken()}` },
-    });
-    let data;
-    try { data = await res.json(); }
-    catch { alert(`移除失敗：伺服器錯誤（HTTP ${res.status}）`); return; }
-
-    // static/js/sip-profile.js — deleteAclEntry() 成功分支
-    if (res.ok && data.ok) {
-      if (data.still_active_until_restart) {
-        alert(`已從清單移除「${cidr}」，但目前仍在 FreeSWITCH 記憶體中生效，需重啟服務才會真正撤銷信任。`);
-      }
-      switchSpTab('sp-acl');
-    } else {
-      alert(`移除失敗：${data.detail || '未知錯誤'}`);
-    }
-  } catch (e) {
-    alert(`移除失敗：${e.message}`);
   }
 }
 

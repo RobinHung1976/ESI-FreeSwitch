@@ -1,17 +1,10 @@
-// acl.js — ACL 信任清單獨立頁面
+// acl.js — SIPTrunk ACL 信任清單（唯一入口）
 //
-// 與 static/js/sip-profile.js 的「信任 SBC 清單」Tab（renderSpAclTab）呼叫同一組後端 API
-// （/api/acl/trusted-sbc*），但獨立成頁面，理由：
-// core/permissions.py 把 acl 歸在 System 類、sip_profile 歸在 Operational 類，
-// 兩者權限矩陣可能不同（例如 Technical Support 群組有 sip_profile 讀寫但無 acl 權限），
-// 若只靠 sip-profile.js 內嵌的 Tab 2，會出現「看得到頁籤但打 API 吃 403」的情況。
-// 本頁純粹依照 acl 模組的權限顯示/隱藏（沿用 init.js 既有的 applyAuthUI() 邏輯，
+// 2026-07-17：原本 static/js/sip-profile.js 的 Tab 2「信任 SBC 清單」已移除，
+// 本頁面是 acl.conf.xml 自訂信任清單（/api/acl/trusted-sbc*）管理的唯一入口，
+// 純粹依照 acl 模組的權限顯示/隱藏（沿用 init.js 既有的 applyAuthUI() 邏輯，
 // data-page="acl" 直接對應 Module.ACL，不需額外設定 NAV_PAGE_TO_MODULE）。
-//
-// 刻意不重用 sip-profile.js 內的 openAclEditor/saveAclEntry/deleteAclEntry/restartFreeswitchForAcl，
-// 因為那組函式的「刷新」邏輯綁死在 sip_profile 的 Hub 版面（switchSpTab('sp-acl')），
-// 直接呼叫在本頁面會找不到對應 DOM 而失效；因此本檔案的函式全部獨立命名（aclPage 前綴），
-// 避免與 sip-profile.js 的全域函式撞名或互相干擾。
+// 函式命名維持 aclPage 前綴，與其他頁面的同類命名風格一致。
 
 let _aclPageEditingCidr = null;
 
@@ -94,7 +87,8 @@ async function _aclPageLoad() {
         <span id="acl-page-save-msg" style="font-size:12px;opacity:0;transition:opacity 0.3s"></span>
       </div>
       <div style="font-size:11px;color:var(--muted)">
-        此頁面與「SIP Profile 進階設定」頁的「信任 SBC 清單」Tab 使用同一份資料（同一支後端 API），兩邊互相同步，差別只在權限判斷依據 acl 模組。
+        用途：內部 SBC/SIP Trunk 可能分佈在不同網段，僅靠 local-network-acl 的同網段自動信任無法涵蓋，
+        於此明確列舉信任來源。新增/移除項目後，若下方顯示「待重啟」，需執行「立即重啟套用」才會生效。
       </div>
     </div>
   </div>`;

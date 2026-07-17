@@ -1,37 +1,11 @@
-// calls.js — 即時通話監控（User-Centric Monitor）
+// calls.js — 通話監控共用函式庫（User-Centric Monitor）
+//
+// 2026-07-17：移除獨立的「即時通話監控」頁面（原本的 renderCalls()），
+// 因為功能與「通話即時狀態」（overview.js 的 renderOverview()）完全重複，
+// 且沒有掛斷/保留/轉接操作按鈕，確認不需要保留獨立頁面。
+// 本檔案下方的 _uc* 系列輔助函式仍被 overview.js 的 renderOverview() 呼叫使用，
+// 不能整支刪除，只移除上面這個已經不再需要的獨立頁面函式。
 
-async function renderCalls() {
-  document.getElementById('mainContent').innerHTML = `
-  <div class="panel">
-    <div class="panel-header">
-      
-      <span class="panel-badge live">LIVE · 載入中...</span>
-    </div>
-    <div style="padding:40px;text-align:center;color:var(--muted)">正在連線至 FreeSwitch...</div>
-  </div>`;
-
-  const callData = await apiFetch('/api/calls');
-  const rows = (callData && callData.rows) ? callData.rows : [];
-
-  document.getElementById('mainContent').innerHTML = `
-  <div class="panel">
-    <div class="panel-header">
-      
-      <span class="panel-badge live">LIVE · ${rows.length} 通</span>
-      <div class="panel-actions">
-        <button class="btn" onclick="switchPage('calls')">↺ 刷新</button>
-      </div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr><th>UUID</th><th>來源</th><th>目的地</th><th>狀態</th><th>時長</th><th>方向</th><th>操作</th></tr>
-        </thead>
-        <tbody>${buildCallRows(rows)}</tbody>
-      </table>
-    </div>
-  </div>`;
-}
 // ── User-Centric Monitor：全域分機清單快取 ───────────────────────────────────
 let _ucExtList = [];        // [{ id, name }]  從 /api/extensions/list 載入
 let _ucShowOffline = false; // 是否顯示離線分機
@@ -327,4 +301,3 @@ function _renderLiveCalls() {
     _ucUpdateBadge();
   }
 }
-

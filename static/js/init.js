@@ -4,7 +4,6 @@
 const pages = {
   overview:    { render: renderOverview,    title: '通話即時狀態' },
   report:      { render: renderReport,      title: '通話統計報表' },
-  calls:       { render: renderCalls,       title: '即時通話監控' },
   extensions:  { render: renderExtensions,  title: '分機管理' },
   groups:      { render: renderGroups,      title: '分機群組管理' },
   ivr:         { render: renderIVR,         title: 'IVR 互動語音管理' },
@@ -21,7 +20,7 @@ const pages = {
   settings:    { render: () => renderSettings(_settingsNode), title: '系統設定' },
   backup:      { render: () => renderBackupPage(_backupNode),  title: '備份管理' },
   sip_profile: { render: renderSipProfile,  title: 'SIP Profile 進階設定' },
-  acl:         { render: renderAclPage,     title: 'ACL 信任清單' },
+  acl:         { render: renderAclPage,     title: 'SIPTrunk ACL 信任清單' },
   users:       { render: renderUsersManagement, title: '使用者管理' },
 };
 
