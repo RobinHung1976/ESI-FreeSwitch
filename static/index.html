@@ -43,6 +43,9 @@
           <div class="nav-item" data-page="report" onclick="switchPage('report')">
             <span class="nav-icon">📊</span> 通話統計報表
           </div>
+          <div class="nav-item" data-page="calls" onclick="switchPage('calls')">
+            <span class="nav-icon">📞</span> 即時通話監控
+          </div>
         </div>
       </div>
 
@@ -101,6 +104,9 @@
           <div class="nav-item" data-page="users" onclick="switchPage('users')">
             <span class="nav-icon">👤</span> 使用者管理
           </div>
+          <div class="nav-item" data-page="acl" onclick="switchPage('acl')">
+            <span class="nav-icon">🛡️</span> ACL 信任清單
+          </div>
           <div class="nav-item" data-page="settings" onclick="switchPage('settings')">
             <span class="nav-icon">⚙</span> 設定
           </div>
@@ -146,6 +152,7 @@
 <script src="/static/js/cdr.js"></script>
 <script src="/static/js/gateway.js"></script>
 <script src="/static/js/sip-profile.js"></script>  <!-- 新增這行 -->
+<script src="/static/js/acl.js"></script>
 <script src="/static/js/esl.js"></script>
 <script src="/static/js/logs.js"></script>
 <script src="/static/js/settings-vars.js"></script>
