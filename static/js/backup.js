@@ -238,7 +238,7 @@ async function backupSaveSettings() {
 }
 
 function downloadFile(path) {
-  const url = `${API_BASE}/api/download?path=${encodeURIComponent(path)}`;
+  const url = `${API_BASE}/api/download?path=${encodeURIComponent(path)}&token=${encodeURIComponent(getToken())}`;
   const a   = document.createElement('a');
   a.href     = url;
   a.download = path.split('/').pop();

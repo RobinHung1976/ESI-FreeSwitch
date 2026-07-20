@@ -251,11 +251,12 @@ function _recGotoPage(p) {
 const _recUrlMap = new Map();
 
 function buildRecRow(f) {
-  const streamUrl = `${API_BASE}/api/recordings/stream?path=${encodeURIComponent(f.path)}`;
-  const monoUrl   = `${API_BASE}/api/recordings/stream_mono?path=${encodeURIComponent(f.path)}`;
-  const dlUrl     = `${API_BASE}/api/download?path=${encodeURIComponent(f.path)}`;
+  const _tok = encodeURIComponent(getToken());
+  const streamUrl = `${API_BASE}/api/recordings/stream?path=${encodeURIComponent(f.path)}&token=${_tok}`;
+  const monoUrl   = `${API_BASE}/api/recordings/stream_mono?path=${encodeURIComponent(f.path)}&token=${_tok}`;
+  const dlUrl     = `${API_BASE}/api/download?path=${encodeURIComponent(f.path)}&token=${_tok}`;
   const monoFile  = f.mono_path ? f.mono_path.split('/').pop() : '';
-  const dlMonoUrl = f.mono_path ? `${API_BASE}/api/download?path=${encodeURIComponent(f.mono_path)}` : '';
+  const dlMonoUrl = f.mono_path ? `${API_BASE}/api/download?path=${encodeURIComponent(f.mono_path)}&token=${_tok}` : '';
   const hasMono   = !!f.mono_path;
   const uid       = btoa(f.path).replace(/[^a-zA-Z0-9]/g, '');
 

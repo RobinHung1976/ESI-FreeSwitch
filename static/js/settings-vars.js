@@ -131,7 +131,7 @@ async function openHoldMusicPicker(varKey) {
 function _hmPickerPlay(path) {
   const audio = document.getElementById('hm-picker-audio');
   if (!audio) return;
-  audio.src = `${API_BASE}/api/sounds/stream?path=${encodeURIComponent(path)}`;
+  audio.src = `${API_BASE}/api/sounds/stream?path=${encodeURIComponent(path)}&token=${encodeURIComponent(getToken())}`;
   audio.play().catch(() => {});
 }
 
@@ -978,7 +978,7 @@ function _backupToast(msg, type) {
 
 function backupDownload(filename) {
   const a = document.createElement('a');
-  a.href  = `${API_BASE}/api/backup/download?filename=${encodeURIComponent(filename)}`;
+  a.href  = `${API_BASE}/api/backup/download?filename=${encodeURIComponent(filename)}&token=${encodeURIComponent(getToken())}`;
   a.download = filename;
   document.body.appendChild(a);
   a.click();

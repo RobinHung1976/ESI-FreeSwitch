@@ -43,7 +43,7 @@ function soundPlay(path, btn) {
     else player.pause();
   } else {
     player.dataset.currentPath = path;
-    player.src = `${API_BASE}/api/sounds/stream?path=${encodeURIComponent(path)}`;
+    player.src = `${API_BASE}/api/sounds/stream?path=${encodeURIComponent(path)}&token=${encodeURIComponent(getToken())}`;
     player.play().catch(() => {});
   }
 }

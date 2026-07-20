@@ -543,7 +543,7 @@ function histPageGo(delta) {
 function downloadHistoryLog() {
   if (!_histDate) return;
   const a = document.createElement('a');
-  a.href     = `${API_BASE}/api/logs/download?date=${_histDate}`;
+  a.href     = `${API_BASE}/api/logs/download?date=${_histDate}&token=${encodeURIComponent(getToken())}`;
   a.download = `freeswitch-${_histDate}.log`;
   a.click();
 }

@@ -12,7 +12,7 @@ from core.backup_manager import (
     backup_dashboard_config, backup_freeswitch_packages,
     restore_dashboard_config, list_backups, delete_backup, get_backup_dir,
 )
-from core.auth import require_permission
+from core.auth import require_permission, require_permission_media
 from core.permissions import Module
 
 router = APIRouter()
@@ -59,7 +59,7 @@ async def api_backup_run(body: BackupRunRequest):
 
 # ── GET /api/backup/download ──────────────────────────────────────────────────
 
-@router.get("/api/backup/download", dependencies=[Depends(require_permission(Module.BACKUP, "read"))])
+@router.get("/api/backup/download", dependencies=[Depends(require_permission_media(Module.BACKUP, "read"))])
 def api_backup_download(filename: str = Query(...)):
     """下載指定備份檔"""
     import re

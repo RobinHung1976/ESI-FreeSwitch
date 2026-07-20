@@ -156,7 +156,7 @@ function _ivrRenderList() {
           : _ivrSounds.filter(s=>s.source==='custom').map(s => `
             <div style="display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px">
               <span style="font-size:12px;color:var(--text)">${s.filename}</span>
-              <audio controls style="height:24px;width:140px" src="${API_BASE}/api/sounds/stream?path=${encodeURIComponent(s.path)}"></audio>
+              <audio controls style="height:24px;width:140px" src="${API_BASE}/api/sounds/stream?path=${encodeURIComponent(s.path)}&token=${encodeURIComponent(getToken())}"></audio>
               <button class="btn" style="font-size:11px;padding:2px 6px;color:var(--red)"
                 onclick="_ivrDeleteSound('${s.filename}')">✕</button>
             </div>`).join('')}

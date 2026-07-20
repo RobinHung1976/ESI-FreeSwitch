@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Depends
 from fastapi.responses import FileResponse
 
 from core.constants import IVR_SOUNDS_DIR, IVR_MENU_DIR
-from core.auth import require_permission
+from core.auth import require_permission, require_permission_media
 from core.permissions import Module
 
 router = APIRouter()
@@ -177,7 +177,7 @@ def delete_sound(filename: str, force: bool = Query(default=False)):
     return {'ok': True}
 
 
-@router.get("/api/sounds/stream", dependencies=[Depends(require_permission(Module.SOUNDS, "read"))])
+@router.get("/api/sounds/stream", dependencies=[Depends(require_permission_media(Module.SOUNDS, "read"))])
 async def stream_sound(path: str):
     """串流播放音檔（試聽用）。僅允許音檔庫範圍內的路徑，防止任意檔案讀取"""
     allowed = [IVR_SOUNDS_DIR, '/usr/share/freeswitch/sounds/']
