@@ -10,13 +10,13 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from core import state
 from core.runtime import FS_LOG_DIR, FS_LOG_FILE, _rotate_log_now
-from core.auth import require_permission
+from core.auth import require_permission, require_permission_sse
 from core.permissions import Module
 
 router = APIRouter()
 
 
-@router.get("/api/logs/stream", dependencies=[Depends(require_permission(Module.LOGS, "read"))])
+@router.get("/api/logs/stream", dependencies=[Depends(require_permission_sse(Module.LOGS, "read"))])
 async def stream_logs():
     """Live-stream FreeSwitch log via SSE, with ESL event injection"""
     import json as _json

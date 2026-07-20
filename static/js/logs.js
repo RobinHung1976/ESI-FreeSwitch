@@ -801,7 +801,7 @@ function startLogStream() {
   const stream = document.getElementById('log-stream');
   if (!stream) return;
 
-  _logSSE = new EventSource(`${API_BASE}/api/logs/stream`);
+  _logSSE = new EventSource(`${API_BASE}/api/logs/stream?token=${encodeURIComponent(getToken())}`);
 
   _logSSE.onmessage = (e) => {
     try {

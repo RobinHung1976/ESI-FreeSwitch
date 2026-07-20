@@ -104,6 +104,40 @@ def require_permission(module: str, action: Action):
     return _dep
 
 
+def get_current_user_sse(
+    token: str | None = None,
+    creds: HTTPAuthorizationCredentials | None = Depends(_security),
+) -> dict:
+    """
+    SSE 專用認證：瀏覽器原生 EventSource 無法自訂 Authorization header，
+    比照既有 WebSocket 認證作法（core/runtime.py ws_handler 的 ?token=），
+    改為 header 或 query string token 兩者擇一皆可通過；一般 REST API
+    仍只認 header（見 get_current_user），不受此函式影響。
+    """
+    raw_token = creds.credentials if creds is not None else token
+    if not raw_token:
+        raise HTTPException(401, "缺少登入憑證")
+    try:
+        payload = decode_access_token(raw_token)
+    except TokenError as e:
+        raise HTTPException(401, str(e))
+
+    payload["permissions"] = {
+        mod: Perm(**flags) for mod, flags in payload.get("permissions", {}).items()
+    }
+    return payload
+
+
+def require_permission_sse(module: str, action: Action):
+    """SSE 端點專用版本的 require_permission，認證走 get_current_user_sse"""
+    def _dep(user: dict = Depends(get_current_user_sse)) -> dict:
+        perm: Perm = user["permissions"].get(module, Perm())
+        if not perm.allows(action):
+            raise HTTPException(403, f"權限不足：{module} 需要 {action} 權限")
+        return user
+    return _dep
+
+
 def apply_scope(user: dict, requested_ext: str | None, module: str) -> str | None:
     """
     scope='own' 的使用者，即使前端傳了別的分機號也強制鎖定成自己的 owned_ext；
