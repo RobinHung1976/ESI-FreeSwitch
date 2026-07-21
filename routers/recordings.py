@@ -10,7 +10,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, Body, Depends
 from fastapi.responses import FileResponse
 
-from core.auth import require_permission, require_permission_media, get_current_user, apply_scope
+from core.auth import require_permission, require_permission_media, get_current_user, get_current_user_media, apply_scope
 from core.permissions import Module
 
 router = APIRouter()
@@ -302,7 +302,7 @@ def force_sync_recordings():
 
 
 @router.get("/api/recordings/stream", dependencies=[Depends(require_permission_media(Module.RECORDINGS, "read"))])
-async def stream_recording(path: str, user: dict = Depends(get_current_user)):
+async def stream_recording(path: str, user: dict = Depends(get_current_user_media)):
     """串流播放錄音檔"""
     if not path.startswith(RECORDINGS_DIR):
         raise HTTPException(status_code=403, detail="不允許存取此路徑")
@@ -325,7 +325,7 @@ async def stream_recording(path: str, user: dict = Depends(get_current_user)):
 
 
 @router.get("/api/recordings/stream_mono", dependencies=[Depends(require_permission_media(Module.RECORDINGS, "read"))])
-async def stream_mono_recording(path: str, user: dict = Depends(get_current_user)):
+async def stream_mono_recording(path: str, user: dict = Depends(get_current_user_media)):
     """串流播放 mono 合併錄音；若尚未產生則即時補建"""
     if not path.startswith(RECORDINGS_DIR):
         raise HTTPException(status_code=403, detail="不允許存取此路徑")
