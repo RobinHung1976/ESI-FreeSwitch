@@ -4,6 +4,8 @@
 
 ## 2026-07
 
+- 07-20 fix: 全站稽核發現 `/api/download` 完全無認證且有路徑穿越風險，已修復（依路徑前綴對應模組權限 + realpath 正規化）；同時補齊音檔試聽/日誌下載/備份下載/錄音播放共 6 支前端檔案缺 token 的問題 → [詳情](changelog-details/20260720-download-endpoint-auth-fix.md)
+- 07-20 fix: 即時日誌 SSE 串流因權限系統上線後被 401 擋住，`EventSource` 無法帶 Authorization header 導致完全收不到訊息，改比照 WebSocket 認證支援 `?token=` query string → [詳情](changelog-details/20260720-logs-stream-auth-fix.md)
 - 07-17 refactor: 側邊欄分類重整（管理→話務功能、系統→系統維運、號碼目錄搬到話務功能） → [詳情](changelog-details/20260717-sidebar-nav-category-rename.md)
 - 07-17 style: 側邊欄視覺優化（標題/項目字級對比度調整）+ updateN.sh 文件交付流程修正、記錄自動歸檔 git add -A 誤掃問題 → [詳情](changelog-details/20260717-sidebar-visual-refinement.md)
 - 07-17 feat: `owned_ext` 支援明確清空（新增 `clear_owned_ext` 參數，向下相容） → [詳情](changelog-details/20260717-owned-ext-clear-and-acl-calls-refactor.md)

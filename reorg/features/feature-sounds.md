@@ -18,7 +18,7 @@
 - 統一試聽播放器：清單每筆一個播放/暫停按鈕，實際播放共用同一個 `<audio>` 元件，按鈕圖示依 `play`/`pause`/`ended` 真實事件同步
 - 刪除自訂音檔前檢查是否被 IVR 引用中，使用中需 `force=true` 二次確認強制刪除
 
-## 後端 API
+## 後端 API（更新）
 
 | Method | Endpoint | 說明 |
 |---|---|---|
@@ -26,9 +26,18 @@
 | `POST` | `/api/sounds/upload` | 上傳（格式/大小/重名檢查） |
 | `DELETE` | `/api/sounds/{filename}?force=` | 刪除，預設擋下使用中檔案 |
 | `GET` | `/api/sounds/usage?filename=` | 查詢被哪些 IVR 引用 |
-| `GET` | `/api/sounds/stream?path=` | 試聽串流 |
+| `GET` | `/api/sounds/stream?path=` | 試聽串流。**認證**：`<audio src>` 無法自訂 header，改採 header 或 `?token=<JWT>` query string 兩者擇一（`require_permission_media`，2026-07-20 起），前端 `ivr.js`/`sounds.js`/`settings-vars.js` 三處試聽都已補上 `&token=` |
 
-舊端點 `/api/ivr/sounds/*` 仍保留，內部委派呼叫上述共用函式，向下相容。
+舊端點 `/api/ivr/sounds/*` 仍保留，內部委派呼叫上述共用函式，向下相容（**注意**：`/api/ivr/sounds/stream` 目前仍是 `require_permission` header-only，尚未確認是否有前端用 `<audio src>` 直接呼叫，如新增此類用法需一併改用 `require_permission_media`）。
+
+## 已知限制 / 待擴充（更新）
+
+- 分機編輯/語音信箱問候語選擇器目前僅 IVR 已串接音檔庫，分機/語音信箱尚未串接（`sound_usage()` 目前僅掃描 IVR JSON 設定）
+- 見 `changelog-details/20260720-download-endpoint-auth-fix.md`：`/api/sounds/stream` 認證機制變更記錄
+
+
+
+
 
 ## 內建音檔掃描
 

@@ -47,16 +47,26 @@
 | 同步機制（雙保險） | ① 每次 API 查詢前先做增量同步（快速）；② 背景執行緒每 5 分鐘全量 `os.walk` 掃描一次，upsert 新檔、清除已刪除檔案的記錄（跳過 `.mono` 目錄，避免 mono 檔被誤索引進主表） |
 | 手動同步 | `POST /api/recordings/sync`，回傳已索引總數 |
 
-## 後端 API
+## 後端 API（更新）
 
 | Method | Endpoint | 說明 |
 |---|---|---|
 | `GET` | `/api/recordings` | 列表，query params：`extension`（同時比對 caller **或** callee）、`start_dt`/`end_dt`（`YYYY-MM-DDTHH:MM`，轉換為 `rec_dt` 範圍比對）、`search`（檔名關鍵字）、`limit`/`offset`（分頁，預設每頁 200） |
 | `POST` | `/api/recordings/sync` | 手動觸發全量索引同步 |
 | `DELETE` | `/api/recordings` | 移至 `.trash` 並同步從 DB 刪除對應記錄 |
-| `GET` | `/api/recordings/stream` | 串流播放立體聲原始檔（Range Request） |
-| `GET` | `/api/recordings/stream_mono` | 串流播放 mono 合併音檔，DB 記錄缺失時即時補建 |
-| `GET` | `/api/download` | 下載（`path` 參數指定立體聲或 mono 檔） |
+| `GET` | `/api/recordings/stream` | 串流播放立體聲原始檔（Range Request）。**認證**：`<audio src>` 無法自訂 header，改採 header 或 `?token=<JWT>` query string 兩者擇一（`require_permission_media`），函式內部做 `scope='own'` 過濾的 `Depends` 也統一改用 `get_current_user_media` |
+| `GET` | `/api/recordings/stream_mono` | 串流播放 mono 合併音檔，DB 記錄缺失時即時補建。認證方式同上 |
+| `GET` | `/api/download` | 下載（`path` 參數指定立體聲或 mono 檔）。**認證**：依路徑前綴對應模組權限（`/recordings/`→RECORDINGS），見 `feature-backup.md`／`changelog-details/20260720-download-endpoint-auth-fix.md` |
+
+## 已知限制 / 待擴充（更新）
+
+- 分機篩選採 `caller = ? OR callee = ?`，僅支援單一分機精確比對，不支援多選
+- Mono 合併僅支援 WAV 來源
+- 音檔庫（`feature-sounds.md`）目前僅 IVR 已串接選檔器，分機/語音信箱問候語尚未串接
+- （已修復）2026-07-20 前 `stream`/`stream_mono` 函式簽名內殘留 header-only 的 `get_current_user`（用於 `scope='own'` 過濾），與 decorator 認證機制不一致，導致帶 query token 的 `<audio src>` 播放仍 401，見 `changelog-details/20260720-download-endpoint-auth-fix.md`
+
+
+
 
 ## 前端頁面（`static/js/recordings.js`）
 

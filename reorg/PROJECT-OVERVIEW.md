@@ -134,3 +134,21 @@ cd /opt/fs-dashboard
 - [ ] 錄音 `.trash` 自動清理
 - [ ] Dialplan 備份歷史列表與一鍵還原
 - [ ] 分機/語音信箱問候語串接音檔庫選擇器(目前僅 IVR 已串接)
+
+## 開發慣例補充：新增瀏覽器原生機制端點時的認證注意事項（2026-07-20 起）
+
+背景：專案已連續在 `EventSource`（即時日誌）、`<audio src>`（音檔試聽/錄音播放）、`<a href>` 直接下載（日誌/備份/錄音下載）三類端點上，因「瀏覽器原生機制無法自訂 `Authorization` header」而踩到同一類問題，其中 `/api/download` 更一度是完全無認證的資安缺口。詳見：
+- [20260720 即時日誌 SSE 認證修復](../changelog-details/20260720-logs-stream-auth-fix.md)
+- [20260720 全站稽核 + /api/download 資安缺口修復](../changelog-details/20260720-download-endpoint-auth-fix.md)
+
+**日後新增或修改端點時，若前端會用以下任一種方式呼叫（而非 `fetch()`/`apiFetch()`）**：
+
+- `new EventSource(...)`
+- `<audio src>` / `<video src>` / `.src = ...`
+- `<a href>` 導向下載、`window.open(...)`、`location.href = ...`
+
+**務必**：
+1. 後端 `dependencies` 改用 `core/auth.py` 的 `require_permission_media(module, action)`，不要用預設的 `require_permission()`
+2. 如果端點函式簽名內部另外還需要 `user` 物件（例如做 `scope='own'` 過濾），**該處的 `Depends()` 也要用 `get_current_user_media`**，不能沿用 `get_current_user`（兩者是各自獨立的依賴，各自要求認證，只改其中一處仍會 401）
+3. 前端組 URL 時補上 `&token=${encodeURIComponent(getToken())}`
+4. 新增後順手跑一次 `grep -n "Depends(get_current_user)" routers/*.py`，確認沒有殘留的函式層級 header-only 認證

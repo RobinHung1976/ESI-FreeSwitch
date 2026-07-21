@@ -10,15 +10,24 @@
 | Dashboard 設定備份 | FreeSwitch 設定檔 + Dashboard 程式 + 還原腳本 | 數 MB |
 | FreeSwitch 套件備份 | 已安裝的所有 `freeswitch-*` `.deb`（版本完全一致） | 150–250 MB |
 
-## 後端 API
+## 後端 API（更新）
 
 | Method | Endpoint | 說明 |
 |---|---|---|
 | `POST` | `/api/backup/run` | 觸發備份，body `{type: config\|packages\|both}` |
 | `GET` | `/api/backup/list` | 列出所有備份（含 size/mtime） |
-| `GET` | `/api/backup/download?filename=` | 下載 |
+| `GET` | `/api/backup/download?filename=` | 下載。**認證**：`<a href>` 直接下載無法自訂 header，改採 header 或 `?token=<JWT>` query string 兩者擇一（`require_permission_media`，2026-07-20 起） |
 | `DELETE` | `/api/backup/{filename}` | 刪除 |
 | `POST` | `/api/backup/restore` | 上傳還原（Server 運行中情境） |
+
+## 安全性（更新）
+
+- 備份檔名格式驗證（regex），還原解壓前檢查路徑安全（防 path traversal）
+- 還原前自動備份現有設定
+- 下載 API 限制檔名格式；2026-07-20 前 `/api/download`（供錄音/備份等共用的通用下載端點）曾完全無認證且路徑比對未正規化，存在未授權下載與路徑穿越風險，已修復（依路徑前綴對應模組權限 + `os.path.realpath()` 正規化），見 `changelog-details/20260720-download-endpoint-auth-fix.md`
+
+
+
 
 ## 設定（`settings.json`）
 
@@ -96,3 +105,4 @@ backup_auto_time（可設定）  自動備份 Dashboard 設定（backup_auto_ena
 |---|---|
 | NAS 遠端路徑 | 僅支援已掛載本機路徑，不支援直接填 SFTP/S3/SMB UNC |
 | 自動備份範圍 | 每日自動僅 config 備份，套件備份需手動觸發 |
+
