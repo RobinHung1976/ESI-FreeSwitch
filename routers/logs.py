@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import FileResponse, StreamingResponse
 
 from core import state
-from core.runtime import FS_LOG_DIR, FS_LOG_FILE, _rotate_log_now
+from core.runtime import FS_LOG_DIR, FS_LOG_FILE, _rotate_log_and_cdr_now
 from core.auth import require_permission, require_permission_media
 from core.permissions import Module
 
@@ -98,8 +98,18 @@ def list_log_files():
 
 @router.post("/api/logs/rotate", dependencies=[Depends(require_permission(Module.LOGS, "update"))])
 def rotate_log_now():
-    """手動立即執行 log 輪轉（將今天以前的 log 另存為日期檔）"""
-    result = _rotate_log_now()
+    """
+    手動立即執行 log 輪轉（將今天以前的 log 另存為日期檔）。
+
+    2026-08-11 起改呼叫 `_rotate_log_and_cdr_now()`：SIGHUP 是 FreeSwitch
+    process 層級訊號，重新開啟 log 檔案的同時也會讓 mod_cdr_csv 反應，
+    若不同時安全歸檔 CDR，Master.csv 裡尚未保存的內容會被 FreeSwitch
+    自己的 rotate-on-hup 邏輯搬進孤兒檔案。因此點擊「立即輪轉」會連帶
+    把今天累積的 CDR 一併歸檔（等同同時按了 CDR 頁面的「立即歸檔」），
+    這是刻意的行為變更，避免資料遺失。詳見
+    changelog-details/20260811-log-rotate-hup-fix.md。
+    """
+    result = _rotate_log_and_cdr_now(cdr_use_today=True, primary="log")
     if not result["ok"]:
         raise HTTPException(status_code=400, detail=result["error"])
     return result

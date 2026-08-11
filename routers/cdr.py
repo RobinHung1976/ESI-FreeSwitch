@@ -17,7 +17,7 @@ import glob
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from core.runtime import CDR_DIR, CDR_MASTER, _rotate_cdr_now
+from core.runtime import CDR_DIR, CDR_MASTER, _rotate_log_and_cdr_now
 from core import cdr_db
 
 router = APIRouter()
@@ -54,8 +54,18 @@ def download_cdr_archive(filename: str = Query(...)):
 
 @router.post("/api/cdr/rotate", dependencies=[Depends(require_permission(Module.CDR, "update"))])
 def rotate_cdr_now():
-    """手動立即執行 CDR 歸檔（用今天日期）：同步進 DB → 建彙總 → 封存 CSV → 清空 Master.csv"""
-    result = _rotate_cdr_now(use_today=True)
+    """
+    手動立即執行 CDR 歸檔（用今天日期）：同步進 DB → 建彙總 → 封存 CSV → 清空 Master.csv。
+
+    2026-08-11 起改呼叫 `_rotate_log_and_cdr_now()`：SIGHUP 是 FreeSwitch
+    process 層級訊號，重新開啟 CDR 檔案的同時也會讓 mod_logfile 反應，
+    若不同時安全歸檔 log，freeswitch.log 裡尚未保存的內容會被 FreeSwitch
+    自己的 rotate-on-hup 邏輯搬進孤兒檔案。因此點擊「立即歸檔」會連帶把
+    log 一併輪轉（等同同時按了系統日誌頁面的「立即輪轉」），這是刻意的
+    行為變更，避免資料遺失。詳見
+    changelog-details/20260811-log-rotate-hup-fix.md。
+    """
+    result = _rotate_log_and_cdr_now(cdr_use_today=True, primary="cdr")
     if not result["ok"]:
         raise HTTPException(status_code=400, detail=result["error"])
     return result

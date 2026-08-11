@@ -329,10 +329,77 @@ def save_server_settings(data: dict):
         json.dump(current, f, ensure_ascii=False, indent=2)
 
 
+def _send_freeswitch_hup() -> dict:
+    """
+    送出 SIGHUP 給 FreeSwitch 主 process，觸發 mod_logfile 依
+    logfile.conf.xml 的 rotate-on-hup=true 設定重新開啟 log 檔案。
+
+    背景（2026-08-11 稽核發現，見 changelog-details/20260811-log-rotate-hup-fix.md）：
+    FreeSwitch 收到 SIGHUP 前，既有 file descriptor 的寫入 offset 停留在
+    HUP 之前的位置，外部單純 truncate 檔案內容完全不會讓 FreeSwitch 知道、
+    也不會重置這個 offset。沒有這一步，_rotate_log_now() 的 truncate
+    形同虛設，新內容實質上寫不進使用者看得到的檔案——這是本專案上線以來
+    持續存在、直到 2026-08-11 才被發現的資料遺失型 bug。
+
+    官方文件：https://developer.signalwire.com/freeswitch/FreeSWITCH-Explained/Modules/mod_logfile_1048990
+    （標準做法即 `kill -HUP <freeswitch pid>`）。
+
+    mod_logfile 收到 HUP 後，會自行把「當下的 freeswitch.log」再 rename
+    成 freeswitch.log.<FreeSwitch 內部時間戳記> 並開一個全新的空檔——
+    由於呼叫本函式前 freeswitch.log 已經被我們 truncate 成 0 bytes，
+    這個副產物檔案必然是 0 bytes 空檔，屬無害殘留，一併清掉避免「日誌
+    管理」頁面看到來路不明的空檔案。
+    """
+    import signal
+    import subprocess
+    import time as _t
+
+    try:
+        pgrep_result = subprocess.run(
+            ["pgrep", "-f", "bin/freeswitch"],
+            capture_output=True, text=True, timeout=5
+        )
+        pids = [p for p in pgrep_result.stdout.strip().splitlines() if p]
+        if not pids:
+            return {"ok": False, "error": "找不到 FreeSwitch process，log 檔案未通知重新開啟"}
+        fs_pid = int(pids[0])
+        os.kill(fs_pid, signal.SIGHUP)
+    except Exception as e:
+        return {"ok": False, "error": f"送出 SIGHUP 失敗：{e}"}
+
+    # 短暫等待 mod_logfile／mod_cdr_csv 處理 HUP 並完成各自的 rename，
+    # 再清掉它們產生的空殘留檔（log 與 CDR 兩種副產物都要清）
+    _t.sleep(0.5)
+    cleaned = []
+    for base_path in (FS_LOG_FILE, CDR_MASTER):
+        try:
+            for f in glob.glob(f"{base_path}.*"):
+                try:
+                    if os.path.isfile(f) and os.path.getsize(f) == 0:
+                        os.remove(f)
+                        cleaned.append(os.path.basename(f))
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    return {"ok": True, "pid": fs_pid, "cleaned_empty_artifacts": cleaned}
+
+
 def _rotate_log_now() -> dict:
     """
     將 freeswitch.log 依昨天日期（或目前內容最早日期）另存為
-    freeswitch-YYYY-MM-DD.log，然後清空原始 log 供 FreeSwitch 繼續寫入。
+    freeswitch-YYYY-MM-DD.log，然後清空原始 log。
+
+    注意：本函式**不會**送出 SIGHUP。2026-08-11 修復後，HUP 一律由
+    `_rotate_log_and_cdr_now()` 在 log 與 CDR 兩邊都完成 truncate 後
+    統一送出一次——因為 SIGHUP 是 FreeSwitch process 層級訊號，
+    mod_logfile／mod_cdr_csv 會同時反應，若只有其中一邊完成 truncate
+    就送出訊號，另一邊尚未安全歸檔的內容會被 FreeSwitch 自己的
+    rotate-on-hup 邏輯搬進 Dashboard 不認識的孤兒檔案，等同製造新的
+    資料遺失。單獨呼叫本函式（不接著送 HUP）會導致 FreeSwitch 既有 fd
+    的寫入 offset 不重置、新內容實質上寫不進去，見
+    changelog-details/20260811-log-rotate-hup-fix.md。
     回傳操作結果 dict。
     """
     import re
@@ -350,7 +417,7 @@ def _rotate_log_now() -> dict:
     try:
         # 複製（而非移動）到日期檔，保留原檔供 FreeSwitch 繼續寫入
         shutil.copy2(FS_LOG_FILE, dest_path)
-        # 清空原始 log（truncate，不刪檔，讓 FreeSwitch 的 fd 繼續有效）
+        # 清空原始 log（truncate，不刪檔，保留檔名/inode）
         with open(FS_LOG_FILE, "w") as f:
             f.truncate(0)
         size = os.path.getsize(dest_path)
@@ -419,6 +486,74 @@ def _rotate_cdr_now(use_today: bool = False) -> dict:
         return {"ok": True, "file": dest_name, "path": dest_path, "size": size}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+def _file_is_empty_or_missing(path: str) -> bool:
+    """檔案不存在或大小為 0 bytes（代表沒有尚未安全歸檔的內容會被 HUP 誤搬走）"""
+    try:
+        return (not os.path.isfile(path)) or os.path.getsize(path) == 0
+    except Exception:
+        return False
+
+
+def _rotate_log_and_cdr_now(cdr_use_today: bool = False, primary: str = "log") -> dict:
+    """
+    Log 與 CDR 合併輪轉（2026-08-11 修復核心邏輯，見
+    changelog-details/20260811-log-rotate-hup-fix.md）。
+
+    背景：FreeSwitch 的 `rotate-on-hup` 是 process 層級設定，SIGHUP 送出後
+    mod_logfile／mod_cdr_csv 會**同時**反應。過去 `_rotate_log_now()`／
+    `_rotate_cdr_now()` 各自獨立呼叫、彼此不知道對方進度，若只針對其中一個
+    檔案 truncate 完就送出 HUP，另一個尚未被我們安全複製走的檔案內容，會被
+    FreeSwitch 自己的 rotate-on-hup 邏輯搬進 Dashboard 完全不認識的孤兒檔案
+    （例如 freeswitch.log.<FreeSwitch 內部時間戳記>），等同製造新的資料遺失。
+
+    因此改為：log 與 CDR 各自完成「複製＋truncate」後，才統一送出一次 HUP；
+    且只有在兩邊都「這次真的有 truncate 到」或「檔案本來就是空的（沒東西可
+    丟）」時才送出 HUP，避免「今日已歸檔」這類 no-op 情況下，另一邊還有
+    未保存的新內容卻被 HUP 意外搬走。
+
+    cdr_use_today: 比照原本 `_rotate_cdr_now()` 的參數語意，True＝歸檔今天
+        （手動觸發應使用，因為按下當下 Master.csv 裡裝的是「今天」尚未
+        歸檔的內容），False＝歸檔昨天（排程觸發，午夜後執行時 Master.csv
+        裡裝的是「昨天」的內容）。
+    primary: "log" 或 "cdr"，決定哪一邊的結果攤平到最外層，維持
+        `/api/logs/rotate`／`/api/cdr/rotate` 個別呼叫時原本的回傳格式
+        （`ok`/`file`/`path`/`size`）相容；另一邊的完整結果仍可從
+        回傳值的 "log"/"cdr" key 底下查到。
+    """
+    log_result = _rotate_log_now()
+    cdr_result = _rotate_cdr_now(use_today=cdr_use_today)
+
+    log_safe = log_result.get("ok") or _file_is_empty_or_missing(FS_LOG_FILE)
+    cdr_safe = cdr_result.get("ok") or _file_is_empty_or_missing(CDR_MASTER)
+    any_truncated = log_result.get("ok") or cdr_result.get("ok")
+
+    if any_truncated and log_safe and cdr_safe:
+        hup_result = _send_freeswitch_hup()
+        if not hup_result.get("ok"):
+            print(f"[rotate] ⚠ SIGHUP 失敗：{hup_result.get('error')}，"
+                  f"已 truncate 的檔案可能仍卡在 FreeSwitch 舊 offset")
+    elif not any_truncated:
+        hup_result = {"ok": False, "error": "略過：log 與 CDR 皆無實際 truncate 動作"}
+    else:
+        hup_result = {
+            "ok": False,
+            "error": "略過 HUP：另一邊尚有未安全歸檔的內容（例如今日已歸檔過但"
+                     "檔案已有新資料累積），避免造成孤兒檔案資料遺失，本次僅"
+                     "完成已成功的那一邊，未重置 FreeSwitch 寫入 offset",
+        }
+
+    combined_ok = bool(any_truncated)
+    base = dict(log_result if primary == "log" else cdr_result)
+    base.pop("error", None)
+    base["ok"] = combined_ok
+    if not combined_ok:
+        base["error"] = f"log: {log_result.get('error')}; cdr: {cdr_result.get('error')}"
+    base["log"] = log_result
+    base["cdr"] = cdr_result
+    base["hup"] = hup_result
+    return base
 
 
 def _cleanup_old_cdrs():
@@ -539,9 +674,11 @@ async def log_rotate_scheduler():
         if abs((now - rotate_target).total_seconds()) <= 90 and _rotated_date != today:
             _rotated_date = today
             print(f"[scheduler] 執行 Log/CDR rotate ({today})")
-            print(f"[log-rotate] {_rotate_log_now()}")
+            # 2026-08-11 起改用合併函式：log 與 CDR 都完成 truncate 後才
+            # 統一送出一次 SIGHUP，避免其中一邊尚未安全歸檔時被另一邊的
+            # HUP 意外搬走內容（見 _rotate_log_and_cdr_now() docstring）
+            print(f"[rotate] {_rotate_log_and_cdr_now(cdr_use_today=False, primary='log')}")
             _cleanup_old_logs()
-            print(f"[cdr-rotate] {_rotate_cdr_now()}")
             _cleanup_old_cdrs()
             _cleanup_old_reg_logs()
             cleanup_old_backups()
