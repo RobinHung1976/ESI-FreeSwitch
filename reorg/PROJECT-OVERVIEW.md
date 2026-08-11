@@ -100,7 +100,7 @@ cd /opt/fs-dashboard
 | `ops-deployment.md` | ✅ |
 | `ops-troubleshooting-commands.md` | ✅ |
 | `ops-github-workflow.md` | ✅ |
-| `freeswitch-restore-guide.md` | 🔲 原檔搬進 `ops/` 即可,內容未改動,未重新產出(本次未讀取原始內容,建議直接複製移動) |
+| `freeswitch-restore-guide.md` | ✅(2026-08-11 更新:補上 Nginx reverse proxy + HTTPS 還原步驟、修正過時的驗證網址/指令,並澄清 `data/` 資料庫已含在備份包內;同步更新 `backup_manager.py` 內嵌的 `restore_dashboard.sh`) |
  
 ### Reference
  

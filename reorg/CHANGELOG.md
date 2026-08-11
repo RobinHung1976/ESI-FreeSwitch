@@ -2,6 +2,10 @@
 
 只放「最近 2 個月」的一行式索引，詳細內容請點連結進 `changelog-details/`。超過 2 個月的索引會依半年封存進 `changelog-archive/`（規則見 `PROJECT-OVERVIEW.md` 開發慣例章節）。
 
+## 2026-08
+
+- 08-11 docs: 新機還原指南（`freeswitch-restore-guide.md`）補上 Nginx reverse proxy + HTTPS 還原步驟（原本完全遺漏，會導致還原後瀏覽器連不到 Dashboard），同步修正 `backup_manager.py` 內嵌 `restore_dashboard.sh`、更新過時的驗證網址/指令、澄清 `data/` 資料庫已含在備份包內 → [詳情](changelog-details/20260811-restore-guide-nginx-gap-fix.md)
+
 ## 2026-07
 
 - 07-20 fix: 全站稽核發現 `/api/download` 完全無認證且有路徑穿越風險，已修復（依路徑前綴對應模組權限 + realpath 正規化）；同時補齊音檔試聽/日誌下載/備份下載/錄音播放共 6 支前端檔案缺 token 的問題 → [詳情](changelog-details/20260720-download-endpoint-auth-fix.md)
