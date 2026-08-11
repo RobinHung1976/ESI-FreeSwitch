@@ -18,9 +18,11 @@
 
 已實作範本：時段路由（time_route）、黑名單（blacklist）。
 
-## Context 選單（2026-07-16）
+## Context 選單（2026-07-16 上線，2026-08-11 修復建立邏輯）
 
-範本模式（`dc-context`）與手動模式（`dc-manual-context`）的 Context 選單改為動態讀取 `/api/dialplan/contexts`，並加入「+ 建立新 context...」選項——選取後彈出命名輸入框，呼叫 `POST /api/dialplan/contexts` 建立空資料夾並顯示警語（純 mkdir，仍需另外到 SIP Profile 或其他 dialplan 設定讓某個來源指向這個 context 才會生效），成功後自動選取新建立的 context。這是全站唯一能建立新 context 的入口，詳見 [`20260716-dialplan-context-switch-feature.md`](../changelog-details/20260716-dialplan-context-switch-feature.md)。
+範本模式（`dc-context`）與手動模式（`dc-manual-context`）的 Context 選單改為動態讀取 `/api/dialplan/contexts`，並加入「+ 建立新 context...」選項——選取後彈出命名輸入框，呼叫 `POST /api/dialplan/contexts` 建立，成功後自動選取新建立的 context。這是全站唯一能建立新 context 的入口，詳見 [`20260716-dialplan-context-switch-feature.md`](../changelog-details/20260716-dialplan-context-switch-feature.md)。
+
+**2026-08-11 修復**：`create_context_dir()` 原本只做 `mkdir`，FreeSwitch 完全不認得這種「只有子資料夾、沒有頂層 `<context name="...">` 定義」的 context，選了必定 `Context not found`／`NO_ROUTE_DESTINATION`——已確認至少造成一起分機完全無法撥出的事故。修復後同時建立子資料夾＋頂層 XML 定義檔（比照 `default.xml` 骨架）＋立即 `reloadxml`，回應警語也改成「已建立可用的 context（含頂層定義，FreeSwitch 已可辨識並立即生效）。仍需自行到 SIP Profile 或其他 dialplan 設定中，讓某個來源實際指向這個 context 名稱，該來源的通話才會真正進入此 context」——明確區分「context 本身已可用」與「還要另外設定來源」是兩件獨立的事。`list_contexts()` 同步加上真偽校驗（`_context_has_definition()`），只有資料夾+頂層定義都存在的 context 才會出現在清單，避免任何來源造成的空殼被選中。`default`／`public` 兩個系統保留字禁止重複建立。詳見 [`20260811-dialplan-context-orphan-fix.md`](../changelog-details/20260811-dialplan-context-orphan-fix.md)。
 
 ## 前端三種畫面模式（`_dcMode`）
 
@@ -48,7 +50,7 @@
 | `PUT` | `/api/dialplan/custom/{id}` | 範本模式更新 |
 | `POST` | `/api/dialplan/custom/preview` | 表單即時預覽 XML |
 | `GET` | `/api/dialplan/contexts` | 取得目前存在的 context 清單（與類型一共用） |
-| `POST` | `/api/dialplan/contexts` | 建立新 context 資料夾（純 mkdir；只有本頁面開放此功能，類型一路由規則頁面只能選不能建） |
+| `POST` | `/api/dialplan/contexts` | 建立新 context（子資料夾＋頂層 XML 定義＋立即 reload，2026-08-11 起；只有本頁面開放此功能，類型一路由規則頁面只能選不能建） |
 
 手動模式沿用既有的 `/api/dialplan/file`（`routers/dialplan_files.py`）。
 
