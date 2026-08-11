@@ -48,9 +48,25 @@ ROUTE_DIR = f"{DIALPLAN_ROOT}/default"   # 保留給預設 context 參考用，�
 ROUTE_META_RE = r"<!--\s*DASHBOARD_ROUTE_META:\s*(\{.*?\})\s*-->"
 ROUTE_FILE_PREFIX = "00_route_"
 DEFAULT_CONTEXT = "default"
+PUBLIC_CONTEXT = "public"
+RESERVED_CONTEXTS = {DEFAULT_CONTEXT, PUBLIC_CONTEXT}
 CONTEXT_NAME_RE = r"^[A-Za-z0-9_\-]+$"
 
 PATTERN_TYPES = ("prefix", "exact", "any", "custom_regex")
+
+# 新建 context 的頂層 XML 定義檔樣板。FreeSwitch 要真正認得一個 context，
+# 必須在 /etc/freeswitch/dialplan/ 頂層有一個檔案定義 <context name="...">
+# （比照 default.xml 的 <context name="default">），子資料夾本身只是被這個
+# 頂層檔案用 X-PRE-PROCESS 引入規則檔案用的容器。2026-08-11 修復前，
+# create_context_dir() 只做 mkdir，從未產生這個頂層定義檔，導致建立出來的
+# context 是 FreeSwitch 完全不認識的空殼，選了必定 Context not found /
+# NO_ROUTE_DESTINATION。見 changelog-details/20260811-dialplan-context-orphan-fix.md。
+CONTEXT_TOP_LEVEL_TEMPLATE = """<include>
+  <context name="{ctx}">
+    <X-PRE-PROCESS cmd="include" data="{ctx}/*.xml"/>
+  </context>
+</include>
+"""
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -65,32 +81,96 @@ def _route_dir(context: str) -> str:
     return os.path.join(DIALPLAN_ROOT, ctx)
 
 
-def list_contexts() -> List[str]:
-    """掃描 /etc/freeswitch/dialplan/ 底下實際存在的子資料夾，當作可選 context 清單。
-    路由規則／自定義 Dialplan 兩個前端 Tab 共用這份清單。"""
+def _context_has_definition(ctx: str) -> bool:
+    """
+    檢查 FreeSwitch 是否真的認得這個 context——頂層是否存在對應的
+    <context name="ctx"> 定義，而不只是子資料夾存在。純 mkdir 出來的資料夾
+    不會被 FreeSwitch 的 XML 設定層辨識為合法 context，撥入該 context 一律
+    Context not found（NO_ROUTE_DESTINATION），即使已經有來源指向它。
+    見 changelog-details/20260811-dialplan-context-orphan-fix.md。
+    """
+    needle = f'context name="{ctx}"'
     try:
-        names = sorted(
+        for xmlfile in glob.glob(os.path.join(DIALPLAN_ROOT, "*.xml")):
+            try:
+                with open(xmlfile, "r", encoding="utf-8", errors="ignore") as f:
+                    if needle in f.read():
+                        return True
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return False
+
+
+def list_contexts() -> List[str]:
+    """
+    掃描 /etc/freeswitch/dialplan/ 底下「真正被 FreeSwitch 認得」的 context：
+    資料夾存在，且頂層確實有對應的 <context name="..."> 定義。只有子資料夾、
+    沒有頂層定義的空殼 context（例如 2026-08-11 修復前建立、或未來透過 SSH
+    手動 mkdir 出來的）不會出現在清單中，避免使用者選到 FreeSwitch 實際上
+    完全不認識、撥入必定失敗的 context。見
+    changelog-details/20260811-dialplan-context-orphan-fix.md。
+    路由規則／自定義 Dialplan／分機管理三處前端共用這份清單。
+    """
+    try:
+        all_dirs = sorted(
             d for d in os.listdir(DIALPLAN_ROOT)
             if os.path.isdir(os.path.join(DIALPLAN_ROOT, d))
         )
     except FileNotFoundError:
-        names = []
+        all_dirs = []
+    names = [d for d in all_dirs if _context_has_definition(d)]
     if DEFAULT_CONTEXT not in names:
         names.insert(0, DEFAULT_CONTEXT)
     return names
 
 
 def create_context_dir(context: str) -> str:
-    """建立新的 context 資料夾（純 mkdir，不做任何 SIP Profile／轉接綁定）。
-    只給「自定義 Dialplan」頁面呼叫；路由規則頁面只能選既有 context，不能建立新的。"""
+    """
+    建立新的 context：同時建立子資料夾（規則檔案存放位置）與頂層 XML 定義檔
+    （讓 FreeSwitch 真正辨識這個 context），並立即 reload 生效。
+
+    2026-08-11 修復前，本函式只做 mkdir，FreeSwitch 完全不認識這種「只有
+    子資料夾、沒有頂層 <context name="..."> 定義」的 context，選了必定撥入
+    Context not found（NO_ROUTE_DESTINATION）——已確認實際造成至少一起分機
+    完全無法撥出的事故。見 changelog-details/20260811-dialplan-context-orphan-fix.md。
+
+    只給「自定義 Dialplan」頁面呼叫；路由規則頁面只能選既有 context，不能建立新的。
+    """
     ctx = (context or "").strip()
     if not ctx or not re.match(CONTEXT_NAME_RE, ctx):
         raise ValueError("context 名稱僅能包含英數字、底線、連字號")
-    path = os.path.join(DIALPLAN_ROOT, ctx)
-    if os.path.isdir(path):
+    if ctx in RESERVED_CONTEXTS:
+        raise ValueError(f"「{ctx}」為 FreeSwitch 系統保留 context 名稱，不可重複建立")
+
+    dir_path = os.path.join(DIALPLAN_ROOT, ctx)
+    xml_path = os.path.join(DIALPLAN_ROOT, f"{ctx}.xml")
+    if os.path.isdir(dir_path) or os.path.isfile(xml_path):
         raise ValueError(f"context「{ctx}」已存在")
-    os.makedirs(path, exist_ok=False)
-    return path
+
+    os.makedirs(dir_path, exist_ok=False)
+    try:
+        with open(xml_path, "w", encoding="utf-8") as f:
+            f.write(CONTEXT_TOP_LEVEL_TEMPLATE.format(ctx=ctx))
+    except Exception:
+        # 頂層 XML 寫入失敗，清掉剛建立的資料夾，避免又留下一個新的空殼
+        try:
+            os.rmdir(dir_path)
+        except Exception:
+            pass
+        raise
+
+    try:
+        force_reload()
+    except Exception:
+        # reload 失敗不刪除已寫好的檔案（下次任何操作觸發 reloadxml 時仍會生效），
+        # 但要讓呼叫端知道目前尚未立即生效，避免誤以為已經可以馬上使用
+        raise RuntimeError(
+            f"context「{ctx}」的檔案已建立，但 reloadxml 失敗，"
+            f"請至「ESL 終端機」手動執行 reloadxml 使其生效"
+        )
+    return dir_path
 
 
 # 掃描自定義（未被 Dashboard 任何模組管理）dialplan 檔案時要排除的目錄/檔名
@@ -612,18 +692,23 @@ def get_contexts():
 
 @router.post("/api/dialplan/contexts", dependencies=[Depends(require_permission(Module.DIALPLAN, "create"))])
 def create_context(context: str = Body(..., embed=True)):
-    """建立新的 context 資料夾（純 mkdir）。只給「自定義 Dialplan」頁面呼叫，
-    路由規則頁面只能從既有清單選擇，不提供建立入口。"""
+    """建立新的 context：同時建立子資料夾與頂層 XML 定義檔並立即 reload，完成後
+    FreeSwitch 即可真正辨識這個 context（2026-08-11 起，見
+    changelog-details/20260811-dialplan-context-orphan-fix.md）。只給
+    「自定義 Dialplan」頁面呼叫，路由規則頁面只能從既有清單選擇。"""
     try:
         path = create_context_dir(context)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
     return {
         "ok": True,
         "context": context.strip(),
         "path": path,
-        "warning": "已建立資料夾，但尚未與任何來源綁定。請自行到 SIP Profile 或其他 dialplan 設定"
-                   "中，讓某個來源實際指向這個 context 名稱，通話才會真正進入此 context。",
+        "warning": "已建立可用的 context（含頂層定義，FreeSwitch 已可辨識並立即生效）。"
+                   "仍需自行到 SIP Profile 或其他 dialplan 設定中，讓某個來源實際指向"
+                   "這個 context 名稱，該來源的通話才會真正進入此 context。",
     }
 
 
