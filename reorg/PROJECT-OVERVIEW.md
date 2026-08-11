@@ -111,13 +111,14 @@ cd /opt/fs-dashboard
 2. ~~**登錄記錄(`reg_log`)尚未持久化**:目前仍在記憶體,服務重啟後歸零。~~ → 已於 2026-07-15 完成，見 `changelog-details/20260715-reg-log-persistence.md`。
 3. ~~**Dialplan Context 切換 UI**:後端 `RouteRule` 已有 `context` 欄位,前端加選單即可。~~ → 已於 2026-07-16 完成，見 `changelog-details/20260716-dialplan-context-switch-feature.md`。
 4. ~~**Nginx reverse proxy + HTTPS**：尚未導入。~~ → 已於 2026-07-15 完成，見 `changelog-details/20260715-nginx-https-feature.md`。
-5. USER_NOT_REGISTERED 警告:每通電話出現的無害 NOTICE,`mod_sofia` 內部查詢順序造成,不影響通話品質,可忽略。
+5. ~~USER_NOT_REGISTERED 警告:每通電話出現的無害 NOTICE,`mod_sofia` 內部查詢順序造成,不影響通話品質,可忽略。~~ → **此記錄為誤判**。2026-08-11 查證時發現 `freeswitch.log`/`Master.csv`(CDR)因 rotate 邏輯只 truncate 檔案、從未搭配 `SIGHUP` 通知 FreeSwitch 重新開啟檔案(`rotate-on-hup=true` 的必要前提),導致 fd 寫入 offset 從未重置,新內容實質上寫不進去。`USER_NOT_REGISTERED` 查不到只是這個更嚴重問題的其中一個症狀。**實際影響:CDR 自 2026-07-04 起(除 07-20 短暫恢復)持續約 5 週幾乎完全遺失,freeswitch.log 自 07-06 起同樣停止寫入,且該 5 週的通話記錄無法從系統內部救回**。已於 2026-08-11 修復(log/CDR 合併安全 truncate 後統一送出一次 HUP,避免跨模組孤兒檔案風險),見 `changelog-details/20260811-log-rotate-hup-fix.md`。
 6. ~~**`owned_ext` 無法透過編輯使用者清空**:`auth_db.update_user()` 的 `owned_ext=None` 語意是「不變更」而非「清空」。~~ → 已於 2026-07-17 完成，新增獨立的 `clear_owned_ext` 參數（`None`=不變更 的語意維持不變，向下相容），見 `changelog-details/20260717-owned-ext-clear-and-acl-calls-refactor.md`。
 7. ~~**導覽列權限隱藏尚未全面驗證**:2026-07-13 新增的 `applyAuthUI()` 是全站性邏輯,但只針對「使用者管理」測試過,其餘既有 18 個頁面的模組名稱對應建議找時間補測。~~ → 已於 2026-07-16 完成驗證(19 模組 × 5 內建群組皆符合預期),見 `changelog-details/20260716-nav-permission-audit.md`。
 8. **custom_regex 語意相同但寫法不同無法自動偵測衝突**:衝突檢查採取樣比對法，只能攔截規則字串完全相同的重複，`^6\d{3}$` 與 `^(6\d{3})$` 這類語意相同但寫法不同的正規式仍測不出來，需搭配路由測試工具人工確認。詳見 `changelog-details/20260716-custom-regex-conflict-detection-fix.md`。
 9. **全站 Authorization header 缺漏修復（`update20.sh`/`update21.sh`）僅涵蓋當時排查到的 10 支檔案**:之後新增前端檔案時，寫入操作應優先使用 `apiFetch()`，避免重蹈覆轍。詳見 `changelog-details/20260716-auth-header-missing-fix.md`。
 10. ~~**`calls`/`acl` 模組缺少前端頁面**:`calls` 有 render 函式但側邊欄無入口;`acl` 後端 API(`routers/acl.py`)已存在但完全沒有對應前端頁面,任何群組皆無法從 UI 操作。~~ → 已於 2026-07-17 完成，最終方案：`calls` 頁面確認與「通話即時狀態」（`overview`）功能完全重複且不含操作按鈕，直接移除獨立入口（保留其 `_uc*` 共用函式庫供 `overview` 使用）；`acl` 改為獨立頁面「SIPTrunk ACL 信任清單」，並移除 `sip-profile.js` 內原本重複的 Tab 2，避免權限矩陣不一致（`acl` 屬 System 分類、`sip_profile` 屬 Operational 分類，兩者權限可能不同）。見 `changelog-details/20260717-owned-ext-clear-and-acl-calls-refactor.md`。
 11. **`restore_dashboard.sh` 新增的 Nginx/HTTPS 還原步驟（Step 6.5）尚未實機驗證**：2026-08-11 修補 `freeswitch-restore-guide.md`／`core/backup_manager.py` 補上 Nginx reverse proxy + HTTPS 的新機還原邏輯（安裝 nginx、連結 `deploy/nginx/fs-dashboard.conf`、產生自簽憑證、`nginx -t` 驗證），僅在本機模擬環境測過字串替換與 Python 語法，**從未在任何機器上實際跑過一次完整 `restore_dashboard.sh`**。待有測試機或安排新機重建演練時，需實機驗證 Step 6.5 邏輯（nginx 安裝、symlink、憑證產生、瀏覽器經 `https://<新機IP>/` 實際連得上）。詳見 `changelog-details/20260811-restore-guide-nginx-gap-fix.md`。
+12. **`USER_NOT_REGISTERED` 本身尚未重新查證**：這是本次（見第 5 點）查證的起點，但排查過程中發現的是更嚴重的 log/CDR 寫入管線問題，`USER_NOT_REGISTERED` 這個 NOTICE 本身是否真的「`mod_sofia` 查詢順序造成、無害」從未被真正驗證過（先前記錄查無實際佐證，日誌管線在查證當下已經停擺超過一個月）。現在 log 寫入已修復，建議找時間重新用 `grep "USER_NOT_REGISTERED" freeswitch.log` 觀察，若仍出現則查證觸發條件與是否真的無害，而非直接沿用先前未經證實的結論。
 ## 六、下一步開發(優先順序,截至 2026-07-17)
  
 **高優先**

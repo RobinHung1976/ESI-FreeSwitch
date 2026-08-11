@@ -44,7 +44,7 @@
 | `GET` | `/api/cdr` | 即時 CDR 列表 |
 | `GET` | `/api/cdr/stats` | 統計（`date_str`/`date_to`/`user` 參數；單日回 24 小時分佈，範圍回每日分佈） |
 | `GET` | `/api/cdr/archives` | 歷史歸檔日期清單 |
-| `POST` | `/api/cdr/rotate` | 立即歸檔今日 CDR |
+| `POST` | `/api/cdr/rotate` | 立即歸檔今日 CDR（2026-08-11 起連帶安全輪轉系統日誌，見下方每日排程說明） |
 
 ## 每日自動排程（00:00:30）
 
@@ -54,6 +54,21 @@
 4. 清空 `Master.csv`
 5. 依保留天數清理 `cdr`/`cdr_daily_summary`
 
+**2026-08-11 起**：第 3、4 步（封存＋清空）與 log 的 rotate 合併成
+`core/runtime.py: _rotate_log_and_cdr_now()`，兩邊都安全 truncate 完後才統一送出一次
+`SIGHUP` 通知 FreeSwitch 重新開啟 `Master.csv`（`cdr_csv.conf.xml` 設定
+`rotate-on-hup=true`，缺這一步會導致 FreeSwitch 既有 fd 的寫入 offset 不重置，新 CDR
+實質上寫不進去）。`POST /api/cdr/rotate`（手動立即歸檔）現在會連帶把系統日誌也安全輪轉一次，
+反之亦然，這是為了避免跨模組孤兒檔案風險的刻意行為變更。詳見
+`changelog-details/20260811-log-rotate-hup-fix.md`。
+
 ## 一次性搬遷腳本
 
 `migrate_cdr_backfill.py`：匯入既有 `Master.csv` + 所有歸檔 CSV 進 SQLite，並為每個歷史日期建立彙總（冪等，可重複執行）。
+
+## 已知限制
+
+（無：2026-06-26 上線以來的 rotate 邏輯缺少 SIGHUP 導致約 5 週 CDR 幾乎完全遺失
+（2026-07-04~07-19、07-21~08-11，除 07-20 短暫恢復）的問題已於 2026-08-11 修復。該期間
+遺失的通話明細**無法從系統內部救回**，需要對外通話計費依據的話，建議向 SIP Trunk / 電信商
+調閱其自留紀錄。詳見 `changelog-details/20260811-log-rotate-hup-fix.md`）

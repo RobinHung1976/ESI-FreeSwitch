@@ -4,6 +4,7 @@
 
 ## 2026-08
 
+- 08-11 fix: 【資料遺失事故】log/CDR rotate 的 truncate 從未搭配 SIGHUP，導致 FreeSwitch fd 寫入 offset 從未重置，freeswitch.log 至少自 07-06 起、CDR 自 07-04 起（除 07-20 短暫恢復）持續約 5 週幾乎完全未寫入新資料；修復為 log/CDR 合併安全 truncate 後統一送出一次 HUP，避免跨模組孤兒檔案風險 → [詳情](changelog-details/20260811-log-rotate-hup-fix.md)
 - 08-11 docs: 新機還原指南（`freeswitch-restore-guide.md`）補上 Nginx reverse proxy + HTTPS 還原步驟（原本完全遺漏，會導致還原後瀏覽器連不到 Dashboard），同步修正 `backup_manager.py` 內嵌 `restore_dashboard.sh`、更新過時的驗證網址/指令、澄清 `data/` 資料庫已含在備份包內 → [詳情](changelog-details/20260811-restore-guide-nginx-gap-fix.md)
 
 ## 2026-07
