@@ -105,7 +105,7 @@ cd /opt/fs-dashboard
 ### Reference
  
 - `reference/FreeSWITCH_Official_Documentation_Quick_Index.md`(原檔搬移,內容不變,未重新產出)
-## 五、已知待處理事項(截至 2026-07-17)
+## 五、已知待處理事項(截至 2026-08-11)
  
 1. **全新環境部署需手動觸發帳號建立**:`server.py` 只呼叫 `auth_db.init_db()` 建表,不會自動 seed,需手動呼叫一次 `POST /api/auth/bootstrap`。詳見 `feature-permissions-auth.md`。
 2. ~~**登錄記錄(`reg_log`)尚未持久化**:目前仍在記憶體,服務重啟後歸零。~~ → 已於 2026-07-15 完成，見 `changelog-details/20260715-reg-log-persistence.md`。
@@ -117,6 +117,7 @@ cd /opt/fs-dashboard
 8. **custom_regex 語意相同但寫法不同無法自動偵測衝突**:衝突檢查採取樣比對法，只能攔截規則字串完全相同的重複，`^6\d{3}$` 與 `^(6\d{3})$` 這類語意相同但寫法不同的正規式仍測不出來，需搭配路由測試工具人工確認。詳見 `changelog-details/20260716-custom-regex-conflict-detection-fix.md`。
 9. **全站 Authorization header 缺漏修復（`update20.sh`/`update21.sh`）僅涵蓋當時排查到的 10 支檔案**:之後新增前端檔案時，寫入操作應優先使用 `apiFetch()`，避免重蹈覆轍。詳見 `changelog-details/20260716-auth-header-missing-fix.md`。
 10. ~~**`calls`/`acl` 模組缺少前端頁面**:`calls` 有 render 函式但側邊欄無入口;`acl` 後端 API(`routers/acl.py`)已存在但完全沒有對應前端頁面,任何群組皆無法從 UI 操作。~~ → 已於 2026-07-17 完成，最終方案：`calls` 頁面確認與「通話即時狀態」（`overview`）功能完全重複且不含操作按鈕，直接移除獨立入口（保留其 `_uc*` 共用函式庫供 `overview` 使用）；`acl` 改為獨立頁面「SIPTrunk ACL 信任清單」，並移除 `sip-profile.js` 內原本重複的 Tab 2，避免權限矩陣不一致（`acl` 屬 System 分類、`sip_profile` 屬 Operational 分類，兩者權限可能不同）。見 `changelog-details/20260717-owned-ext-clear-and-acl-calls-refactor.md`。
+11. **`restore_dashboard.sh` 新增的 Nginx/HTTPS 還原步驟（Step 6.5）尚未實機驗證**：2026-08-11 修補 `freeswitch-restore-guide.md`／`core/backup_manager.py` 補上 Nginx reverse proxy + HTTPS 的新機還原邏輯（安裝 nginx、連結 `deploy/nginx/fs-dashboard.conf`、產生自簽憑證、`nginx -t` 驗證），僅在本機模擬環境測過字串替換與 Python 語法，**從未在任何機器上實際跑過一次完整 `restore_dashboard.sh`**。待有測試機或安排新機重建演練時，需實機驗證 Step 6.5 邏輯（nginx 安裝、symlink、憑證產生、瀏覽器經 `https://<新機IP>/` 實際連得上）。詳見 `changelog-details/20260811-restore-guide-nginx-gap-fix.md`。
 ## 六、下一步開發(優先順序,截至 2026-07-17)
  
 **高優先**
