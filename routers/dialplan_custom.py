@@ -22,6 +22,7 @@ from typing import Optional, Literal
 
 from fastapi import APIRouter, HTTPException, Body, Depends
 from pydantic import BaseModel, field_validator
+from lxml import etree
 
 from core.dialplan_common import make_backup, reload_and_verify, rollback_new_file, validate_xml
 from core.auth import require_permission
@@ -31,6 +32,10 @@ router = APIRouter()
 
 DIALPLAN_ROOT = "/etc/freeswitch/dialplan"
 META_RE = re.compile(r"<!--\s*DASHBOARD_CUSTOM_META:\s*(\{.*?\})\s*-->", re.DOTALL)
+
+# 與 routers/extensions.py 的 EXT_DIR 相同路徑，此處獨立宣告一份常數只是為了
+# 避免跨 router import（本檔只需要唯讀掃描，不需要 extensions.py 的其他邏輯）
+EXT_DIR = "/etc/freeswitch/directory/default"
 
 # 由其他頁面管理的檔案前綴／檔名，類型三的列表要排除，避免重複管理入口
 MANAGED_PREFIXES = ("00_route_", "00_group_", "00_ivr_")
@@ -44,11 +49,14 @@ MANAGED_FILENAMES = ("default.xml", "public.xml")
 class TemplateField(BaseModel):
     key: str
     label: str
-    type: Literal["text", "number", "select", "time"]
+    type: Literal["text", "number", "select", "time", "dynamic_multiselect"]
     required: bool = True
     options: Optional[list[str]] = None
     placeholder: Optional[str] = None
     help: Optional[str] = None
+    # dynamic_multiselect 專用：前端依此值決定要向哪個 API 抓即時選項清單，
+    # 目前只有 "extensions" 一種來源，保留擴充空間（未來如 gateway/sound 清單）
+    source: Optional[str] = None
 
 
 def _xml_escape(s: str) -> str:
@@ -127,6 +135,58 @@ def _gen_blacklist(v: dict) -> str:
 """
 
 
+def _gen_internal_extension(v: dict) -> str:
+    """
+    內線互撥：讓勾選的分機可以在這個 context 內互相直撥。
+    刻意不比照 default.xml 的 Local_Extension 寫死開放整段號碼區間
+    （^(1[0-9]{3})$），而是只開放使用者明確勾選的分機清單，避免在自訂
+    context（如 TC-ACSBC）意外開放不該讓這個來源撥打的分機。
+    """
+    name = _require(v, "name", "規則名稱")
+    ext_raw = _require(v, "extensions", "允許撥打的分機")
+    extensions = [e.strip() for e in ext_raw.split(",") if e.strip()]
+    if not extensions:
+        raise ValueError("至少需要勾選一支分機")
+    for e in extensions:
+        if not re.match(r"^\d{2,8}$", e):
+            raise ValueError(f"分機號碼「{e}」格式不合法，只能是數字")
+
+    timeout_raw = _require(v, "call_timeout", "通話逾時秒數")
+    try:
+        timeout = int(timeout_raw)
+    except ValueError:
+        raise ValueError("通話逾時秒數須為整數")
+    if not (5 <= timeout <= 300):
+        raise ValueError("通話逾時秒數須介於 5-300 之間")
+
+    on_no_answer = str(v.get("on_no_answer") or "hangup")
+    if on_no_answer not in ("hangup", "voicemail"):
+        raise ValueError("「找不到人時」參數不合法")
+
+    ext_name = _xml_escape(name)
+    pattern = "|".join(re.escape(e) for e in extensions)
+
+    voicemail_action = ""
+    if on_no_answer == "voicemail":
+        voicemail_action = """
+      <action application="answer"/>
+      <action application="sleep" data="1000"/>
+      <action application="bridge" data="loopback/app=voicemail:default ${domain_name} ${dialed_extension}"/>"""
+
+    return f"""<include>
+  <extension name="{ext_name}">
+    <condition field="destination_number" expression="^({pattern})$">
+      <action application="export" data="dialed_extension=$1"/>
+      <action application="set" data="call_timeout={timeout}"/>
+      <action application="set" data="hangup_after_bridge=true"/>
+      <action application="set" data="continue_on_fail=true"/>
+      <action application="bridge" data="user/${{dialed_extension}}@${{domain_name}}"/>{voicemail_action}
+    </condition>
+  </extension>
+</include>
+"""
+
+
 TEMPLATES = {
     "time_route": {
         "label": "時段路由（上班／非上班時間分流）",
@@ -158,6 +218,22 @@ TEMPLATES = {
         ],
         "generator": _gen_blacklist,
     },
+    "internal_extension": {
+        "label": "內線互撥（限定分機清單）",
+        "description": "讓勾選的分機可以在這個 context 內互相直撥，找不到人時可選擇掛斷或轉語音信箱。",
+        "fields": [
+            TemplateField(key="name", label="規則名稱", type="text",
+                          placeholder="例：TC-ACSBC 內線互撥"),
+            TemplateField(key="extensions", label="允許撥打的分機", type="dynamic_multiselect",
+                          source="extensions",
+                          help="只有勾選的分機才能在這個 context 被撥打，未勾選的分機即使存在也撥不通"),
+            TemplateField(key="call_timeout", label="通話逾時秒數", type="number",
+                          placeholder="30", help="對方響鈴多久沒接算失敗（5-300 秒）"),
+            TemplateField(key="on_no_answer", label="找不到人時", type="select",
+                          options=["hangup", "voicemail"]),
+        ],
+        "generator": _gen_internal_extension,
+    },
 }
 
 
@@ -185,7 +261,7 @@ class TemplatePreviewRequest(BaseModel):
 class TemplateCreateRequest(BaseModel):
     template_id: str
     filename: str
-    context: Literal["default", "public"] = "default"
+    context: str = "default"
     values: dict
 
     @field_validator("filename")
@@ -194,6 +270,19 @@ class TemplateCreateRequest(BaseModel):
         if not re.match(r"^[\w\-]+\.xml$", v):
             raise ValueError("檔名只能含英數字、底線、連字號，副檔名須為 .xml")
         return v
+
+    @field_validator("context")
+    @classmethod
+    def valid_context_format(cls, v):
+        # 2026-08-11 修復：舊版寫死 Literal["default","public"]，導致範本模式
+        # 完全無法寫入 default/public 以外的自訂 context（例如 TC-ACSBC），
+        # 跟前端「Context 選單支援任意既有 context」的實際行為互相矛盾。
+        # 這裡先只驗證格式，「是否真的存在」的檢查放在 handler 裡（見
+        # create_from_template()），因為那邊才有 filesystem 存取時機。
+        ctx = (v or "").strip()
+        if not ctx or not re.match(r"^[\w\-]+$", ctx):
+            raise ValueError("context 名稱格式不合法")
+        return ctx
 
 
 class TemplateUpdateRequest(BaseModel):
@@ -239,11 +328,48 @@ def list_templates():
     }
 
 
+@router.get("/api/dialplan/custom/extension-options", dependencies=[Depends(require_permission(Module.DIALPLAN, "read"))])
+def list_extension_options():
+    """
+    輕量分機清單，只給範本表單「勾選分機」用途：只回傳 id + 顯示名稱。
+
+    刻意不重用 /api/extensions/list（Module.EXTENSIONS）：那支 API 會明碼回傳
+    SIP 密碼／語音信箱密碼，單純為了畫面上勾選分機號碼卻把密碼一併下載到
+    前端不合理；且權限矩陣是 19 模組各自獨立設計，操作 Dialplan 頁面的人
+    不一定有（也不應該需要）Extensions 模組的讀取權限。這支端點掛在
+    Module.DIALPLAN 底下，跟頁面本身同一個權限模組，不需要跨模組權限。
+    """
+    result = []
+    for filepath in sorted(glob.glob(f"{EXT_DIR}/*.xml")):
+        try:
+            tree = etree.parse(filepath)
+            user = tree.find('.//user')
+            if user is None:
+                continue
+            ext_id = user.get('id', '').strip()
+            if not ext_id or not ext_id.isdigit():
+                continue
+            variables = {v.get('name'): v.get('value') for v in tree.findall('.//variables/variable')}
+            result.append({
+                "id": ext_id,
+                "caller_id_name": variables.get('effective_caller_id_name', '') or ext_id,
+            })
+        except Exception:
+            continue
+    return {"extensions": result}
+
+
 @router.get("/api/dialplan/custom/files", dependencies=[Depends(require_permission(Module.DIALPLAN, "read"))])
 def list_custom_files():
-    """列出所有非其他頁面管理的自定義 dialplan 檔案（default + public）"""
+    """列出所有非其他頁面管理的自定義 dialplan 檔案。
+
+    2026-08-11 修復：舊版寫死只掃 ("default", "public") 兩個 context，
+    導致寫進其他自訂 context（如 TC-ACSBC）的檔案完全不會出現在這個列表——
+    改成掃描 list_contexts() 回傳的所有真實存在 context。
+    """
+    from routers.dialplan_routes import list_contexts as _list_dialplan_contexts
     result = []
-    for context in ("default", "public"):
+    for context in _list_dialplan_contexts():
         pattern = os.path.join(DIALPLAN_ROOT, context, "*.xml")
         for fpath in sorted(glob.glob(pattern)):
             fname = os.path.basename(fpath)
@@ -331,6 +457,14 @@ def preview_template(req: TemplatePreviewRequest):
 
 @router.post("/api/dialplan/custom/create", dependencies=[Depends(require_permission(Module.DIALPLAN, "create"))])
 def create_from_template(req: TemplateCreateRequest):
+    from routers.dialplan_routes import list_contexts as _list_dialplan_contexts
+    if req.context not in _list_dialplan_contexts():
+        raise HTTPException(
+            status_code=400,
+            detail=f"context「{req.context}」不存在或尚未被 FreeSwitch 正式辨識，"
+                   f"請先到「自定義 Dialplan」頁面的 Context 選單建立",
+        )
+
     dp_dir = os.path.join(DIALPLAN_ROOT, req.context)
     fpath = os.path.join(dp_dir, req.filename)
 

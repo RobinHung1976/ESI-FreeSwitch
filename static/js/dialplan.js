@@ -1091,6 +1091,7 @@ function _dcRenderRoot() {
     root.innerHTML = _dcFormPanelHtml();
     _dcBindFormEvents();
     _dcUpdatePreview();
+    _dcPopulateDynamicFields();
   }
 }
 
@@ -1196,6 +1197,18 @@ function _dcCurrentTemplate() {
 function _dcFieldInputHtml(field, value) {
   const v = value !== undefined && value !== null ? value : '';
   const common = `id="dc-field-${field.key}" data-key="${field.key}" class="settings-input" style="max-width:320px"`;
+  if (field.type === 'dynamic_multiselect') {
+    // 選項要向後端即時抓取（如分機清單），此處先給占位容器，
+    // 實際內容由 _dcPopulateDynamicFields() 在表單插入 DOM 後非同步填入。
+    // data-prefill 保留編輯模式回填用的既有選中值（逗號分隔）。
+    return `<div id="dc-field-${field.key}" data-key="${field.key}"
+                 data-source="${_escAttr(field.source || '')}"
+                 data-prefill="${_escAttr(v)}"
+                 style="max-width:420px;border:1px solid var(--border);border-radius:4px;
+                        padding:8px;max-height:180px;overflow-y:auto;background:var(--panel2)">
+              <div style="font-size:12px;color:var(--muted)">載入中...</div>
+            </div>`;
+  }
   if (field.type === 'select') {
     const opts = (field.options || []).map(o =>
       `<option value="${_escHtml(o)}" ${o === v ? 'selected' : ''}>${_escHtml(o)}</option>`).join('');
@@ -1283,7 +1296,11 @@ function _dcBindFormEvents() {
   if (!tpl) return;
   tpl.fields.forEach(f => {
     const el = document.getElementById(`dc-field-${f.key}`);
-    if (el) el.addEventListener('input', _dcSchedulePreview);
+    if (!el) return;
+    // dynamic_multiselect 的容器本身不是 input，勾選框是事後非同步塞進去的，
+    // 用 change 事件冒泡監聽整個容器即可涵蓋所有勾選框，不需要逐一綁定
+    const evt = f.type === 'dynamic_multiselect' ? 'change' : 'input';
+    el.addEventListener(evt, _dcSchedulePreview);
   });
 }
 
@@ -1291,10 +1308,76 @@ function _dcCollectValues() {
   const tpl = _dcCurrentTemplate();
   const values = {};
   (tpl?.fields || []).forEach(f => {
+    if (f.type === 'dynamic_multiselect') {
+      const container = document.getElementById(`dc-field-${f.key}`);
+      const checked = container
+        ? Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value)
+        : [];
+      values[f.key] = checked.join(',');
+      return;
+    }
     const el = document.getElementById(`dc-field-${f.key}`);
     values[f.key] = el ? el.value.trim() : '';
   });
   return values;
+}
+
+// ── dynamic_multiselect 欄位：非同步載入選項 ─────────────────────────────────
+async function _dcPopulateDynamicFields() {
+  const tpl = _dcCurrentTemplate();
+  if (!tpl) return;
+  const dynFields = tpl.fields.filter(f => f.type === 'dynamic_multiselect');
+
+  for (const f of dynFields) {
+    const container = document.getElementById(`dc-field-${f.key}`);
+    if (!container) continue;
+
+    const prefillRaw = container.getAttribute('data-prefill') || '';
+    const prefillSet = new Set(prefillRaw.split(',').map(s => s.trim()).filter(Boolean));
+
+    try {
+      let options = [];
+      if (f.source === 'extensions') {
+        const data = await apiFetch('/api/dialplan/custom/extension-options');
+        options = (data && data.extensions) ? data.extensions : [];
+      }
+
+      if (!options.length) {
+        container.innerHTML = `<div style="font-size:12px;color:var(--muted)">（目前沒有可選項目）</div>`;
+        continue;
+      }
+
+      const filterId = `dc-filter-${f.key}`;
+      const listId   = `dc-list-${f.key}`;
+      container.innerHTML = `
+        <input id="${filterId}" class="settings-input" style="width:100%;box-sizing:border-box;
+               margin-bottom:6px;font-size:12px" placeholder="搜尋分機號碼或名稱..."
+               oninput="_dcFilterDynamicOptions('${listId}', this.value)">
+        <div id="${listId}">
+          ${options.map(o => `
+            <label style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;cursor:pointer"
+                   data-search="${_escAttr((o.id + ' ' + (o.caller_id_name || '')).toLowerCase())}">
+              <input type="checkbox" value="${_escAttr(o.id)}" ${prefillSet.has(String(o.id)) ? 'checked' : ''}>
+              <span>${_escHtml(o.id)}${o.caller_id_name ? ` <span style="color:var(--muted)">(${_escHtml(o.caller_id_name)})</span>` : ''}</span>
+            </label>`).join('')}
+        </div>`;
+    } catch (e) {
+      container.innerHTML = `<div style="font-size:12px;color:var(--red)">載入失敗：${_escHtml(e.message)}</div>`;
+    }
+  }
+
+  // 選項填好後，若編輯模式已有預選值，觸發一次預覽更新
+  if (dynFields.length) _dcSchedulePreview();
+}
+
+function _dcFilterDynamicOptions(listId, keyword) {
+  const kw = (keyword || '').trim().toLowerCase();
+  const list = document.getElementById(listId);
+  if (!list) return;
+  Array.from(list.children).forEach(label => {
+    const hay = label.getAttribute('data-search') || '';
+    label.style.display = (!kw || hay.includes(kw)) ? 'flex' : 'none';
+  });
 }
 
 // ── Context 選單：動態清單 + 就地建立新 context ───────────────────────────────
