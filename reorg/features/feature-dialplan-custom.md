@@ -16,7 +16,21 @@
 
 每個範本自帶欄位 schema（`TemplateField`：key/label/type/required/options/placeholder/help），前端依 schema 動態產生表單。新增範本只需在 `TEMPLATES` dict 加一筆 `fields` + `generator`，不需改動路由或前端框架程式碼。
 
-已實作範本：時段路由（time_route）、黑名單（blacklist）。
+已實作範本：時段路由（time_route）、黑名單（blacklist）、內線互撥（internal_extension，2026-08-11 新增，見下方說明）。
+
+`dynamic_multiselect`（2026-08-11 新增）：選項需向後端即時抓取的欄位型別（目前僅「內線互撥」範本的分機勾選使用，`source="extensions"`），前端表單框架擴充支援非同步載入 + 搜尋篩選 + 全選/清除，且渲染時改用獨立直向版型（標籤/欄位/說明文字各自一行），避免跟一般欄位共用的單行三欄版型互相擠壓變窄。
+
+## 內線互撥範本（2026-08-11）
+
+讓勾選的分機可以在指定 context 內互相直撥。刻意不比照 `default.xml` 的 `Local_Extension` 寫死開放整段號碼區間（`^(1[0-9]{3})$`），而是只開放使用者明確勾選的分機清單，避免在自訂 context（如 `TC-ACSBC`）意外開放不該讓這個來源撥打的分機。「找不到人時」可選擇掛斷或轉語音信箱。分機清單即時從 `GET /api/dialplan/custom/extension-options` 抓取——刻意不重用 `/api/extensions/list`（那支 API 會明碼回傳 SIP／語音信箱密碼），改用只回傳 `id`＋顯示名稱的輕量端點，掛在 `Module.DIALPLAN` 權限底下，避免操作 Dialplan 頁面的人需要額外具備 Extensions 模組讀取權限、也避免密碼被不必要地下載到前端。
+
+「通話逾時秒數」欄位新增 `TemplateField.default`（真正的預設值，非僅 placeholder），新增時自動帶入 `30`，不需手動填即可通過必填驗證。
+
+背景與完整除錯過程見 [`20260811-internal-extension-template.md`](../changelog-details/20260811-internal-extension-template.md)。
+
+## 修復：範本模式原本無法寫入 default/public 以外的 context（2026-08-11）
+
+`TemplateCreateRequest.context` 原本寫死 `Literal["default", "public"]`，與前端「Context 選單支援任意既有 context」的實際行為互相矛盾——選了 `default`/`public` 以外的 context 送出去會直接被 Pydantic 擋在門口（422），範本模式因此實質上只能用在這兩個系統內建 context。已修復為驗證「是否為真實存在的 context」（同時要求資料夾＋頂層 `<context name>` 定義都存在，呼應 [`20260811-dialplan-context-orphan-fix.md`](../changelog-details/20260811-dialplan-context-orphan-fix.md) 的教訓）。`list_custom_files()` 同步修正，改掃描所有真實存在的 context，不再寫死只掃 `default`/`public` 兩個資料夾。
 
 ## Context 選單（2026-07-16 上線，2026-08-11 修復建立邏輯）
 
@@ -44,13 +58,17 @@
 
 | Method | Endpoint | 說明 |
 |---|---|---|
-| `GET` | `/api/dialplan/custom/list` | 檔案列表 |
+| `GET` | `/api/dialplan/custom/templates` | 範本清單（含 schema） |
+| `GET` | `/api/dialplan/custom/files` | 檔案列表 |
 | `GET` | `/api/dialplan/custom/file?path=` | 讀取單一檔案（含 `editable_as_template` 判斷） |
-| `POST` | `/api/dialplan/custom` | 範本模式新增 |
-| `PUT` | `/api/dialplan/custom/{id}` | 範本模式更新 |
+| `POST` | `/api/dialplan/custom/create` | 範本模式新增 |
+| `PUT` | `/api/dialplan/custom/file` | 範本模式更新 |
 | `POST` | `/api/dialplan/custom/preview` | 表單即時預覽 XML |
+| `GET` | `/api/dialplan/custom/extension-options` | 輕量分機清單（2026-08-11 新增，僅 id＋顯示名稱，不含密碼欄位，供「內線互撥」範本勾選用） |
 | `GET` | `/api/dialplan/contexts` | 取得目前存在的 context 清單（與類型一共用） |
 | `POST` | `/api/dialplan/contexts` | 建立新 context（子資料夾＋頂層 XML 定義＋立即 reload，2026-08-11 起；只有本頁面開放此功能，類型一路由規則頁面只能選不能建） |
+
+> 2026-08-11 修正：本表原記載 `POST /api/dialplan/custom`／`PUT /api/dialplan/custom/{id}`，與實際程式碼路徑（`/api/dialplan/custom/create`、`/api/dialplan/custom/file`）不符，已一併修正。
 
 手動模式沿用既有的 `/api/dialplan/file`（`routers/dialplan_files.py`）。
 

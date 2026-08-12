@@ -4,6 +4,7 @@
 
 ## 2026-08
 
+- 08-11 feat: 新增「內線互撥」自訂 Dialplan 範本（限定分機清單，供 `TC-ACSBC` 等自訂 context 使用），實機驗證 1126→1210 透過 `TC-ACSBC` context 成功接通；順手修復範本模式自 07-16 起寫死只能用於 `default`/`public` 的既有 bug、新增不含密碼的輕量分機清單端點；後續兩輪 UX 迭代（逾時秒數預設值、勾選區版面放大與修正） → [詳情](changelog-details/20260811-internal-extension-template.md)
 - 08-11 fix: 【資料完整性】「建立新 context」功能自 07-16 上線以來只做 mkdir、從未產生 FreeSwitch 真正需要的頂層 `<context name>` 定義，導致建出來的 context 是空殼，選了必定 Context not found（已確認造成分機 1126 一次完全無法撥出）；修復為子資料夾＋頂層 XML 定義＋立即 reload 同時建立，`list_contexts()` 加上真偽校驗，並補完既有的 `TC-ACSBC` 空殼 → [詳情](changelog-details/20260811-dialplan-context-orphan-fix.md)
 - 08-11 test: `USER_NOT_REGISTERED` 重新查證結案，確認為 `default.xml`（FreeSwitch 官方 vanilla 範例）`user/@域名` 撥號語法在多 sofia profile 依序檢查時的正常中繼記錄，無害，決議不修改 dialplan；過程中意外發現分機 1126 被誤設成不存在的 context 導致無法撥出（已由使用者自行修正），另立防呆待辦 → [詳情](changelog-details/20260811-user-not-registered-verification.md)
 - 08-11 fix: 【資料遺失事故】log/CDR rotate 的 truncate 從未搭配 SIGHUP，導致 FreeSwitch fd 寫入 offset 從未重置，freeswitch.log 至少自 07-06 起、CDR 自 07-04 起（除 07-20 短暫恢復）持續約 5 週幾乎完全未寫入新資料；修復為 log/CDR 合併安全 truncate 後統一送出一次 HUP，避免跨模組孤兒檔案風險 → [詳情](changelog-details/20260811-log-rotate-hup-fix.md)
