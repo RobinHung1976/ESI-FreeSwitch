@@ -57,6 +57,9 @@ class TemplateField(BaseModel):
     # dynamic_multiselect 專用：前端依此值決定要向哪個 API 抓即時選項清單，
     # 目前只有 "extensions" 一種來源，保留擴充空間（未來如 gateway/sound 清單）
     source: Optional[str] = None
+    # 新增時自動帶入的實際值（不是灰字 placeholder），避免每次都要手動填常見值
+    # 造成儲存時卡在必填驗證。與 placeholder 不同：這個值會真的寫進表單欄位。
+    default: Optional[str] = None
 
 
 def _xml_escape(s: str) -> str:
@@ -228,7 +231,7 @@ TEMPLATES = {
                           source="extensions",
                           help="只有勾選的分機才能在這個 context 被撥打，未勾選的分機即使存在也撥不通"),
             TemplateField(key="call_timeout", label="通話逾時秒數", type="number",
-                          placeholder="30", help="對方響鈴多久沒接算失敗（5-300 秒）"),
+                          default="30", placeholder="30", help="對方響鈴多久沒接算失敗（5-300 秒）"),
             TemplateField(key="on_no_answer", label="找不到人時", type="select",
                           options=["hangup", "voicemail"]),
         ],

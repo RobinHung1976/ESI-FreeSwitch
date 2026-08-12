@@ -1195,7 +1195,10 @@ function _dcCurrentTemplate() {
 }
 
 function _dcFieldInputHtml(field, value) {
-  const v = value !== undefined && value !== null ? value : '';
+  let v = value !== undefined && value !== null ? value : '';
+  // 新增模式下欄位還沒有值時，帶入 field.default 當作實際初始值（不只是灰字
+  // placeholder），避免每次都要手動填常見值，也不會卡在必填驗證
+  if (v === '' && field.default !== undefined && field.default !== null) v = field.default;
   const common = `id="dc-field-${field.key}" data-key="${field.key}" class="settings-input" style="max-width:320px"`;
   if (field.type === 'dynamic_multiselect') {
     // 選項要向後端即時抓取（如分機清單），此處先給占位容器，
@@ -1204,8 +1207,8 @@ function _dcFieldInputHtml(field, value) {
     return `<div id="dc-field-${field.key}" data-key="${field.key}"
                  data-source="${_escAttr(field.source || '')}"
                  data-prefill="${_escAttr(v)}"
-                 style="max-width:420px;border:1px solid var(--border);border-radius:4px;
-                        padding:8px;max-height:180px;overflow-y:auto;background:var(--panel2)">
+                 style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:4px;
+                        padding:8px;max-height:320px;overflow-y:auto;background:var(--panel2)">
               <div style="font-size:12px;color:var(--muted)">載入中...</div>
             </div>`;
   }
@@ -1350,10 +1353,15 @@ async function _dcPopulateDynamicFields() {
       const filterId = `dc-filter-${f.key}`;
       const listId   = `dc-list-${f.key}`;
       container.innerHTML = `
-        <input id="${filterId}" class="settings-input" style="width:100%;box-sizing:border-box;
-               margin-bottom:6px;font-size:12px" placeholder="搜尋分機號碼或名稱..."
-               oninput="_dcFilterDynamicOptions('${listId}', this.value)">
-        <div id="${listId}">
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <input id="${filterId}" class="settings-input" style="flex:1;box-sizing:border-box;font-size:12px"
+                 placeholder="搜尋分機號碼或名稱..." oninput="_dcFilterDynamicOptions('${listId}', this.value)">
+          <button type="button" class="btn" style="font-size:11px;white-space:nowrap;padding:4px 10px"
+                  onclick="_dcToggleAllDynamicOptions('${listId}', true)">全選</button>
+          <button type="button" class="btn" style="font-size:11px;white-space:nowrap;padding:4px 10px"
+                  onclick="_dcToggleAllDynamicOptions('${listId}', false)">清除</button>
+        </div>
+        <div id="${listId}" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px 12px">
           ${options.map(o => `
             <label style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;cursor:pointer"
                    data-search="${_escAttr((o.id + ' ' + (o.caller_id_name || '')).toLowerCase())}">
@@ -1378,6 +1386,19 @@ function _dcFilterDynamicOptions(listId, keyword) {
     const hay = label.getAttribute('data-search') || '';
     label.style.display = (!kw || hay.includes(kw)) ? 'flex' : 'none';
   });
+}
+
+function _dcToggleAllDynamicOptions(listId, checked) {
+  const list = document.getElementById(listId);
+  if (!list) return;
+  // 只作用在目前搜尋篩選後看得到的項目，避免誤勾/誤清已被篩選掉、畫面外的分機
+  Array.from(list.children).forEach(label => {
+    if (label.style.display === 'none') return;
+    const cb = label.querySelector('input[type="checkbox"]');
+    if (cb) cb.checked = checked;
+  });
+  // 觸發一次 change 事件冒泡到外層容器，讓即時預覽跟著更新
+  list.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 // ── Context 選單：動態清單 + 就地建立新 context ───────────────────────────────
