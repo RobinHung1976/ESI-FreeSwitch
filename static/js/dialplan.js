@@ -1235,12 +1235,25 @@ function _dcFormPanelHtml() {
   const isEdit = !!_dcEditingPath;
   const prefill = isEdit ? (_dcEditingValues || {}) : {};
 
-  const fieldsHtml = tpl.fields.map(f => `
+  const fieldsHtml = tpl.fields.map(f => {
+    if (f.type === 'dynamic_multiselect') {
+      // 這種欄位需要較大面積（如分機勾選清單），不適合跟其他欄位一樣塞進
+      // 「標籤＋輸入框＋說明文字」同一行的版型，改成標籤獨立一行、
+      // 欄位本身佔滿整行寬度、說明文字移到下方，避免可用寬度被兩側擠壓變窄
+      return `
+    <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px">
+      <span class="settings-label">${_escHtml(f.label)}${f.required ? ' *' : ''}</span>
+      ${_dcFieldInputHtml(f, prefill[f.key])}
+      ${f.help ? `<span style="font-size:11px;color:var(--muted)">${_escHtml(f.help)}</span>` : ''}
+    </div>`;
+    }
+    return `
     <div class="settings-row">
       <span class="settings-label">${_escHtml(f.label)}${f.required ? ' *' : ''}</span>
       ${_dcFieldInputHtml(f, prefill[f.key])}
       ${f.help ? `<span style="font-size:11px;color:var(--muted);margin-left:8px">${_escHtml(f.help)}</span>` : ''}
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   return `
   <div class="panel" style="max-width:680px;margin:0 auto">
@@ -1353,8 +1366,8 @@ async function _dcPopulateDynamicFields() {
       const filterId = `dc-filter-${f.key}`;
       const listId   = `dc-list-${f.key}`;
       container.innerHTML = `
-        <div style="display:flex;gap:6px;margin-bottom:8px">
-          <input id="${filterId}" class="settings-input" style="flex:1;box-sizing:border-box;font-size:12px"
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+          <input id="${filterId}" class="settings-input" style="flex:1;min-width:160px;box-sizing:border-box;font-size:12px"
                  placeholder="搜尋分機號碼或名稱..." oninput="_dcFilterDynamicOptions('${listId}', this.value)">
           <button type="button" class="btn" style="font-size:11px;white-space:nowrap;padding:4px 10px"
                   onclick="_dcToggleAllDynamicOptions('${listId}', true)">全選</button>
